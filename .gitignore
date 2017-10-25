@@ -12,3 +12,11 @@
 
 # Project-local glide cache, RE: https://github.com/Masterminds/glide/issues/736
 .glide/
+
+# nodejs
+node_modules
+tmp
+.vagrant
+.DS_Store
+npm-debug.log
+
