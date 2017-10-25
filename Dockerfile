@@ -5,12 +5,10 @@ WORKDIR /app
 ENV SRC_DIR=/go/src/surfingcat-trading-bot
 
 ENV API_PORT=3026
-ENV PORT=8086
 EXPOSE 3026
-EXPOSE 8080
 
 # Add the source code:
 ADD . $SRC_DIR
 # Build it:
-RUN cd $SRC_DIR; go build -o server; cp server /app/
+RUN cd $SRC_DIR; go get -u ./...; go build -o server; cp server /app/
 ENTRYPOINT ["./server"]
