@@ -8,15 +8,15 @@ import (
 	"net/http"
 	"strconv"
 	"encoding/json"
-	"math"
 )
 
 type PlotPoint struct {
 	Date string
 	Value string
-
 }
 type PlotPoints []PlotPoint
+
+
 
 
 func handleChartBtcUsd(w http.ResponseWriter, r *http.Request) {
@@ -26,7 +26,7 @@ func handleChartBtcUsd(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Can not reach Bittrex API servers: ", err)
 	}
 	
-	candleSticks, err := bittrex.GetTicks("USDT-BTC", "thirtyMin")
+	candleSticks, err := bittrex.GetTicks("USDT-BTC", "fiveMin")
 	if err != nil {
 		fmt.Println("ERROR OCCURRED: ", err)
 	}
@@ -78,7 +78,7 @@ func handleEmaBtcUsd(w http.ResponseWriter, r *http.Request) {
 
 func handleIndicatorChart(w http.ResponseWriter, r *http.Request) {
 	indicator := r.URL.Query().Get("name")
-	if !stringInSlice(indicator, []string{"ema", "wma"}) {
+	if !stringInSlice(indicator, []string{"ema", "wma", "trima"}) {
 		panic("indicator is not recognized")
 	}
 	market := r.URL.Query().Get("market") //"USDT-BTC"
@@ -93,7 +93,7 @@ func handleIndicatorChart(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 	}
 		
-	candleSticks, err := bittrex.GetTicks(market, "thirtyMin")
+	candleSticks, err := bittrex.GetTicks(market, "fiveMin")
 	if err != nil {
 		panic(err)
 	}
@@ -111,6 +111,7 @@ func handleIndicatorChart(w http.ResponseWriter, r *http.Request) {
 	switch indicator {
 	case "ema": indicatorData = talib.Ema(closes, interval)
 	case "wma": indicatorData = talib.Wma(closes, interval)
+	case "trima": indicatorData = talib.Trima(closes, interval)
 	}
 	
 
@@ -145,13 +146,19 @@ func handleTraderStart(w http.ResponseWriter, r *http.Request) {
 	// buy/sell
 
 	fmt.Println("Trading started at", time.Now().String())
+	tickSource := make(chan bittrex.CandleStick)
+	actionSource := make(chan MarketAction)
 	go func(market string, candles *bittrex.CandleSticks) {
-		strategyWma(market, candles)
+		actionSource <- *strategyWma(market, candles)
 		for {
 			select {
 				case <-time.After(30 * time.Second):
-					strategyWma(market, candles)	
-				
+					fmt.Println("Tick", market, time.Now().String())
+					go nextTick(market, candles, &tickSource)
+				case <-tickSource:
+					actionSource <- *strategyWma(market, candles)
+				case marketAction := <-actionSource:
+					performMarketAction(marketAction)
 			}
 		}
 	}(market, &candleSticks)
@@ -159,60 +166,47 @@ func handleTraderStart(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, string(jsonResponse))
 }
 
-
-func strategyWma(market string, candles *bittrex.CandleSticks) {
-	fmt.Println("Tick", market, time.Now().String())
-	temp := *candles	
-	candleStick, err := bittrex.GetLatestTick(market, "fiveMin")
+func handleStrategyTest(w http.ResponseWriter, r *http.Request) {
+	market := r.URL.Query().Get("market")
+	
+	err := bittrex.IsAPIAlive()
 	if err != nil {
-		fmt.Println("Latest stick was not received: ", err)
-	} else {
-		fmt.Println("Latest tick", temp[len(temp)-1])
-		fmt.Println("New tick", candleStick)
-		if (temp[len(temp)-1].Timestamp != candleStick.Timestamp) {
-			temp = append(temp, *candleStick)
-			*candles = temp[len(temp)-1000:] //take 1000 values
-			fmt.Println("Accepted", len(*candles))
+		fmt.Println("Can not reach Bittrex API servers: ", err)
+		panic(err)
+	}
 
-			closes := valuesFromCandles(*candles)
-			indicatorData1 := talib.Wma(closes, 50)
-			indicatorData2 := talib.Wma(closes, 20)
-		
-			if ((indicatorData1[len(indicatorData1)-1] < indicatorData2[len(indicatorData1)-1]) && (indicatorData1[len(indicatorData1)-2] > indicatorData2[len(indicatorData1)-2])) ||	((indicatorData1[len(indicatorData1)-1] > indicatorData2[len(indicatorData1)-1]) && (indicatorData1[len(indicatorData1)-2] < indicatorData2[len(indicatorData1)-2])) {
-				action := "sell"
-				if indicatorData2[len(indicatorData1)-1] - indicatorData2[len(indicatorData1)-2] > 0 {
-					action = "buy"
+	// get data
+	candleSticks, err := bittrex.GetTicks(market, "fiveMin")
+	if err != nil {
+		fmt.Println("ERROR OCCURRED: ", err)
+		panic(err)
+	}
+	
+	// test through it
+	var result TestingResult
+	var lastPrice float64 = 0
+	var bottomLine float64 = 0
+
+	for i := 0; i <= len(candleSticks) - 1000; i++ {
+		t := candleSticks[0:1000+i]
+		marketAction := strategyWma(market, &t)
+		if (marketAction != nil) {
+			result.Actions = append(result.Actions, *marketAction)
+			if (marketAction.Action == MarketActionBuy) {
+				lastPrice = marketAction.Price
+			} else if marketAction.Action == MarketActionSell {
+				if lastPrice > 0 {
+					bottomLine = bottomLine + marketAction.Price - lastPrice
+					lastPrice = 0
+					result.Balances = append(result.Balances, PlotPoint{time.Time(marketAction.Time).String(), strconv.FormatFloat(bottomLine, 'f', 6, 64)})
 				}
-				marketSummary, err := bittrex.GetMarketSummary(market)
-				if err != nil {
-					fmt.Println("ERROR OCCURRED: ", err)
-				} else {
-					fmt.Println(marketSummary)
-					fmt.Println("WMA crossed, action:", action, ", price:", marketSummary.Ask)
-				}
-			} else {
-				distance := math.Min(math.Abs(indicatorData2[len(indicatorData2)-1] - indicatorData1[len(indicatorData1)-1]), math.Abs(indicatorData2[len(indicatorData2)-2] - indicatorData1[len(indicatorData1)-2]))
-				fmt.Println("Distance:", distance)
 			}
 		}
 	}
-}
 
-func valuesFromCandles(candleSticks bittrex.CandleSticks) []float64 {
-	var closes []float64
-	for _, candle := range candleSticks {
-		closes = append(closes, candle.Close)
-	}
-	return closes
-}
-
-func stringInSlice(a string, list []string) bool {
-    for _, b := range list {
-        if b == a {
-            return true
-        }
-    }
-    return false
+	result.FinalBalance = bottomLine
+	jsonResponse, _ := json.Marshal(result)
+	fmt.Fprintf(w, string(jsonResponse))
 }
 //Strategies
 // Floor finder

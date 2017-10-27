@@ -1,8 +1,9 @@
 <template>
   <div class="container-fluid">
-    <h1>BTC trading</h1>
     <div id="graph-container"></div>
     <button class="btn btn-primary" v-on:click="getQuote()">Update</button>
+    <div id="graph-container2"></div>
+    <button class="btn btn-primary" v-on:click="getQuote2()">Update</button>
   </div>
 </template>
 
@@ -18,31 +19,31 @@ export default {
   methods: {
     getQuote () {
       let chartData = {chart: null, ema: null}
-      this.$http.get('http://localhost:3000/chart/usdbtc')
+      this.$http.get('http://localhost:3026/chart/usdbtc')
       .then(res => {
         chartData.chart = res.data.map(item => {
           return [item.Date, item.Value]
         })
       })
-      .then(() => { return this.$http.get('http://localhost:3000/indicator?name=ema&market=USDT-BTC&interval=50') })
+      .then(() => { return this.$http.get('http://localhost:3026/indicator?name=trima&market=USDT-BTC&interval=50') })
       .then(res => {
         chartData.ema50 = res.data.map(item => {
           return [item.Date, item.Value]
         })
       })
-      .then(() => { return this.$http.get('http://localhost:3000/indicator?name=ema&market=USDT-BTC&interval=20') })
+      .then(() => { return this.$http.get('http://localhost:3026/indicator?name=trima&market=USDT-BTC&interval=20') })
       .then(res => {
         chartData.ema20 = res.data.map(item => {
           return [item.Date, item.Value]
         })
       })
-      .then(() => { return this.$http.get('http://localhost:3000/indicator?name=wma&market=USDT-BTC&interval=50') })
+      .then(() => { return this.$http.get('http://localhost:3026/indicator?name=wma&market=USDT-BTC&interval=50') })
       .then(res => {
         chartData.wma50 = res.data.map(item => {
           return [item.Date, item.Value]
         })
       })
-      .then(() => { return this.$http.get('http://localhost:3000/indicator?name=wma&market=USDT-BTC&interval=20') })
+      .then(() => { return this.$http.get('http://localhost:3026/indicator?name=wma&market=USDT-BTC&interval=20') })
       .then(res => {
         chartData.wma20 = res.data.map(item => {
           return [item.Date, item.Value]
@@ -81,6 +82,31 @@ export default {
           series.legendItem({text: 'WMA 20'})
 
           chart.container('graph-container').draw()
+        })
+      })
+    },
+    getQuote2 () {
+      let chartData = {chart: null, ema: null}
+
+      this.$http.get('http://localhost:3026/strategy/test?market=USDT-BTC')
+      .then(res => {
+        chartData.testing = res.data.Balances.map(item => {
+          return [item.Date, item.Value]
+        })
+      })
+      .then((res) => {
+        return anychart.onDocumentReady(() => {
+          var chart = anychart.stock(false)
+
+          chart.title('Testing Chart')
+          var plot = chart.plot()
+
+          var dataTable = anychart.data.table()
+          dataTable.addData(chartData.testing)
+          var series = plot.line(dataTable.mapAs({'value': 1}))
+          series.legendItem({text: 'TESTING'})
+
+          chart.container('graph-container2').draw()
         })
       })
     }

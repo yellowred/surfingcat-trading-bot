@@ -20,6 +20,7 @@ func startServer(port string) {
 	mux.HandleFunc("/chart/usdbtc", handleChartBtcUsd)
 	mux.HandleFunc("/indicator", handleIndicatorChart)
 	mux.HandleFunc("/trader/start", handleTraderStart)
+	mux.HandleFunc("/strategy/test", handleStrategyTest)
 
 	c := cors.New(cors.Options{
 		AllowedOrigins: []string{"*"},
