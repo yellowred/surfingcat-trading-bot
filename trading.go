@@ -21,8 +21,14 @@ const (
 )
 
 
+type TestingResultAction struct {
+	Action int
+	Market string
+	Price float64
+	Time string
+}
 type TestingResult struct {
-	Actions []MarketAction
+	Actions []TestingResultAction
 	Balances []PlotPoint
 	FinalBalance float64
 }
@@ -43,20 +49,41 @@ func nextTick(market string, candles *bittrex.CandleSticks, tickSource *chan bit
 	}
 }
 
+const MIN_PRICE_SPIKE float64 = 50
+const MIN_PRICE_DIP float64 = 90
 
-func strategyWma(market string, candles *bittrex.CandleSticks) *MarketAction {
+func strategyWma(market string, candles *bittrex.CandleSticks, lastAction *MarketAction) *MarketAction {
 	closes := valuesFromCandles(*candles)
-	indicatorData1 := talib.Wma(closes, 100)
-	indicatorData2 := talib.Wma(closes, 50)
+	indicatorData1 := talib.Wma(closes, 50)
+	indicatorData2 := talib.Wma(closes, 20)
 
+	// if we have a position then we would like to take profits
+	if lastAction != nil && lastAction.Action == MarketActionBuy && LastFloat(closes) > LastFloat(indicatorData2) + MIN_PRICE_SPIKE {
+		return &MarketAction{MarketActionSell, market, LastFloat(closes), time.Time((*candles)[len(*candles)-1].Timestamp)}
+	}
+
+	// if we see some dip we might buy it
+	if LastFloat(closes) < LastFloat(indicatorData2) - MIN_PRICE_DIP {
+		return &MarketAction{MarketActionBuy, market, LastFloat(closes), time.Time((*candles)[len(*candles)-1].Timestamp)}
+	}
+	
 	if ((indicatorData1[len(indicatorData1)-1] < indicatorData2[len(indicatorData1)-1]) && (indicatorData1[len(indicatorData1)-2] > indicatorData2[len(indicatorData1)-2])) ||	((indicatorData1[len(indicatorData1)-1] > indicatorData2[len(indicatorData1)-1]) && (indicatorData1[len(indicatorData1)-2] < indicatorData2[len(indicatorData1)-2])) {
 		// TODO volume confirmation
 		// TODO instrument price above or below wma
 		// TODO wait for a retrace
+
+		// TODO sell earlier
+
+		// trend confirmation
+		indicatorData3 := talib.HtTrendline(closes)
 		if indicatorData2[len(indicatorData2)-1] - indicatorData1[len(indicatorData1)-1] > 0 { //does it cross above?
-			return &MarketAction{MarketActionBuy, market, (*candles)[len(*candles)-1].Close, time.Time((*candles)[len(*candles)-1].Timestamp)}
+			if indicatorData3[len(indicatorData3)-1] > indicatorData3[len(indicatorData3)-2] {
+				return &MarketAction{MarketActionBuy, market, (*candles)[len(*candles)-1].Close, time.Time((*candles)[len(*candles)-1].Timestamp)}
+			}			
 		} else {
-			return &MarketAction{MarketActionSell, market, (*candles)[len(*candles)-1].Close, time.Time((*candles)[len(*candles)-1].Timestamp)}
+			if indicatorData3[len(indicatorData3)-1] < indicatorData3[len(indicatorData3)-2] {
+				return &MarketAction{MarketActionSell, market, (*candles)[len(*candles)-1].Close, time.Time((*candles)[len(*candles)-1].Timestamp)}
+			}
 		}
 	} else {
 		distance := math.Min(math.Abs(indicatorData2[len(indicatorData2)-1] - indicatorData1[len(indicatorData1)-1]), math.Abs(indicatorData2[len(indicatorData2)-2] - indicatorData1[len(indicatorData1)-2]))
@@ -64,6 +91,25 @@ func strategyWma(market string, candles *bittrex.CandleSticks) *MarketAction {
 	}
 	return nil
 }
+
+func strategyDip(market string, candles *bittrex.CandleSticks, lastAction *MarketAction) *MarketAction {
+	closes := valuesFromCandles(*candles)
+	// indicatorData1 := talib.Wma(closes, 50)
+	indicatorData2 := talib.Wma(closes, 20)
+
+	// if we have a position then we would like to take profits
+	if lastAction != nil && lastAction.Action == MarketActionBuy && LastFloat(closes) > LastFloat(indicatorData2) + MIN_PRICE_SPIKE {
+		return &MarketAction{MarketActionSell, market, LastFloat(closes), time.Time((*candles)[len(*candles)-1].Timestamp)}
+	}
+
+	// if we see some dip we might buy it
+	if LastFloat(closes) < LastFloat(indicatorData2) - MIN_PRICE_DIP {
+		return &MarketAction{MarketActionBuy, market, LastFloat(closes), time.Time((*candles)[len(*candles)-1].Timestamp)}
+	}
+
+	return nil
+}
+
 
 func performMarketAction(marketAction MarketAction) {
 	if marketAction.Action == MarketActionBuy {
@@ -92,6 +138,10 @@ func stringInSlice(a string, list []string) bool {
         }
     }
     return false
+}
+
+func LastFloat(arr []float64) float64 {
+	return arr[len(arr) - 1]
 }
 //Strategies
 // Floor finder

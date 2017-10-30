@@ -78,7 +78,7 @@ func handleEmaBtcUsd(w http.ResponseWriter, r *http.Request) {
 
 func handleIndicatorChart(w http.ResponseWriter, r *http.Request) {
 	indicator := r.URL.Query().Get("name")
-	if !stringInSlice(indicator, []string{"ema", "wma", "trima"}) {
+	if !stringInSlice(indicator, []string{"ema", "wma", "trima", "rsi", "httrendline"}) {
 		panic("indicator is not recognized")
 	}
 	market := r.URL.Query().Get("market") //"USDT-BTC"
@@ -112,6 +112,8 @@ func handleIndicatorChart(w http.ResponseWriter, r *http.Request) {
 	case "ema": indicatorData = talib.Ema(closes, interval)
 	case "wma": indicatorData = talib.Wma(closes, interval)
 	case "trima": indicatorData = talib.Trima(closes, interval)
+	case "rsi": indicatorData = talib.Rsi(closes, interval)
+	case "httrendline": indicatorData = talib.HtTrendline(closes)
 	}
 	
 
@@ -148,15 +150,17 @@ func handleTraderStart(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Trading started at", time.Now().String())
 	tickSource := make(chan bittrex.CandleStick)
 	actionSource := make(chan MarketAction)
+	var lastAction MarketAction
+
 	go func(market string, candles *bittrex.CandleSticks) {
-		actionSource <- *strategyWma(market, candles)
+		actionSource <- *strategyWma(market, candles, &lastAction)
 		for {
 			select {
 				case <-time.After(30 * time.Second):
 					fmt.Println("Tick", market, time.Now().String())
 					go nextTick(market, candles, &tickSource)
 				case <-tickSource:
-					actionSource <- *strategyWma(market, candles)
+					actionSource <- *strategyWma(market, candles, &lastAction)
 				case marketAction := <-actionSource:
 					performMarketAction(marketAction)
 			}
@@ -186,12 +190,13 @@ func handleStrategyTest(w http.ResponseWriter, r *http.Request) {
 	var result TestingResult
 	var lastPrice float64 = 0
 	var bottomLine float64 = 0
+	var lastAction MarketAction
 
 	for i := 0; i <= len(candleSticks) - 1000; i++ {
 		t := candleSticks[0:1000+i]
-		marketAction := strategyWma(market, &t)
+		marketAction := strategyDip(market, &t, &lastAction)
 		if (marketAction != nil) {
-			result.Actions = append(result.Actions, *marketAction)
+			result.Actions = append(result.Actions, TestingResultAction{marketAction.Action, marketAction.Market, marketAction.Price, marketAction.Time.String()})
 			if (marketAction.Action == MarketActionBuy) {
 				lastPrice = marketAction.Price
 			} else if marketAction.Action == MarketActionSell {

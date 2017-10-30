@@ -25,13 +25,13 @@ export default {
           return [item.Date, item.Value]
         })
       })
-      .then(() => { return this.$http.get('http://localhost:3026/indicator?name=trima&market=USDT-BTC&interval=50') })
+      .then(() => { return this.$http.get('http://localhost:3026/indicator?name=trima&market=USDT-BTC&interval=30') })
       .then(res => {
         chartData.ema50 = res.data.map(item => {
           return [item.Date, item.Value]
         })
       })
-      .then(() => { return this.$http.get('http://localhost:3026/indicator?name=trima&market=USDT-BTC&interval=20') })
+      .then(() => { return this.$http.get('http://localhost:3026/indicator?name=trima&market=USDT-BTC&interval=12') })
       .then(res => {
         chartData.ema20 = res.data.map(item => {
           return [item.Date, item.Value]
@@ -46,6 +46,12 @@ export default {
       .then(() => { return this.$http.get('http://localhost:3026/indicator?name=wma&market=USDT-BTC&interval=20') })
       .then(res => {
         chartData.wma20 = res.data.map(item => {
+          return [item.Date, item.Value]
+        })
+      })
+      .then(() => { return this.$http.get('http://localhost:3026/indicator?name=httrendline&market=USDT-BTC&interval=20') })
+      .then(res => {
+        chartData.trend = res.data.map(item => {
           return [item.Date, item.Value]
         })
       })
@@ -80,6 +86,11 @@ export default {
           dataTable.addData(chartData.wma20)
           series = plot.line(dataTable.mapAs({'value': 1}))
           series.legendItem({text: 'WMA 20'})
+
+          dataTable = anychart.data.table()
+          dataTable.addData(chartData.trend)
+          series = plot.line(dataTable.mapAs({'value': 1}))
+          series.legendItem({text: 'Trend'})
 
           chart.container('graph-container').draw()
         })
