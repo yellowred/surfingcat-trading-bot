@@ -33,6 +33,36 @@ type TestingResult struct {
 	FinalBalance float64
 }
 
+func Begin(market string, config map[string]string, strategy func(string, *bittrex.CandleSticks, *MarketAction) *MarketAction) {
+	// periods -> ["oneMin", "fiveMin", "thirtyMin", "hour", "day"]
+	candleSticks, err := bittrex.GetTicks(market, config["interval"])
+	if err != nil {
+		fmt.Println("ERROR OCCURRED: ", err)
+		panic(err)
+	}
+
+	fmt.Println("Trading started at", time.Now().String())
+	tickSource := make(chan bittrex.CandleStick)
+	var lastAction MarketAction
+
+	marketAction := strategy(market, &candleSticks, &lastAction)
+	if marketAction != nil {
+		performMarketAction(*marketAction)
+	}
+	for {
+		select {
+			case <-time.After(30 * time.Second):
+				fmt.Println("Tick", market, time.Now().String())
+				go nextTick(market, &candleSticks, &tickSource)
+			case <-tickSource:
+				marketAction := strategy(market, &candleSticks, &lastAction)
+				if marketAction != nil {
+					performMarketAction(*marketAction)
+				}
+		}
+	}
+}
+
 func nextTick(market string, candles *bittrex.CandleSticks, tickSource *chan bittrex.CandleStick) {
 	candleStick, err := bittrex.GetLatestTick(market, "fiveMin")
 	if err != nil {

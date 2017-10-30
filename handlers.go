@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strconv"
 	"encoding/json"
+	"github.com/spf13/viper"
+	"os"
 )
 
 type PlotPoint struct {
@@ -129,6 +131,7 @@ func handleIndicatorChart(w http.ResponseWriter, r *http.Request) {
 
 func handleTraderStart(w http.ResponseWriter, r *http.Request) {
 	market := r.URL.Query().Get("market")
+	strategy := r.URL.Query().Get("strategy")
 
 	err := bittrex.IsAPIAlive()
 	if err != nil {
@@ -136,36 +139,19 @@ func handleTraderStart(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 	}
 	
-	// periods -> ["oneMin", "fiveMin", "thirtyMin", "hour", "day"]
-	candleSticks, err := bittrex.GetTicks(market, "fiveMin")
-	if err != nil {
-		fmt.Println("ERROR OCCURRED: ", err)
-		panic(err)
+	viper.SetConfigType("json")
+	file, err := os.Open("config/trading.json")
+	if err != nil { panic("Config file does not exist.") }	
+	viper.ReadConfig(file)
+
+	config := viper.GetStringMapString("strategies." + strategy)
+
+	switch strategy {
+	case "wma": go Begin(market, config, strategyWma)
+	case "dip": go Begin(market, config, strategyDip)
+	default: panic("Unrecognized strategy.")
 	}
-
-	// listen to ticks
-	// spot wma cross
-	// buy/sell
-
-	fmt.Println("Trading started at", time.Now().String())
-	tickSource := make(chan bittrex.CandleStick)
-	actionSource := make(chan MarketAction)
-	var lastAction MarketAction
-
-	go func(market string, candles *bittrex.CandleSticks) {
-		actionSource <- *strategyWma(market, candles, &lastAction)
-		for {
-			select {
-				case <-time.After(30 * time.Second):
-					fmt.Println("Tick", market, time.Now().String())
-					go nextTick(market, candles, &tickSource)
-				case <-tickSource:
-					actionSource <- *strategyWma(market, candles, &lastAction)
-				case marketAction := <-actionSource:
-					performMarketAction(marketAction)
-			}
-		}
-	}(market, &candleSticks)
+	
 	jsonResponse, _ := json.Marshal("OK")
 	fmt.Fprintf(w, string(jsonResponse))
 }

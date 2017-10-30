@@ -1,0 +1,14 @@
+{
+  "strategies": {
+    "wma": {
+      "interval": "oneMin",
+      "wma_max": 50,
+      "wma_min": 20
+    },
+    "dip": {
+      "interval": "oneMin",
+      "wma_max": 50,
+      "wma_min": 20
+    }
+  }
+}
