@@ -6,3 +6,8 @@ Welcome!
 2. `docker build -t surfingcat-trading-bot .`
 3. `docker run -p 3026:3026 -d --name surfingcat-trading-bot surfingcat-trading-bot`
 4. `curl "http://192.168.33.100:3026/indicator?name=ema&market=USDT-BTC&interval=50"`
+
+## Testing API
+
+- Running trading strategy: `curl "http://localhost:3026/trader/start?market=USDT-BTC&strategy=dip"`
+- Running backtest `curl "http://localhost:3026/strategy/test?market=USDT-BTC"`

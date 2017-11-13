@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"github.com/spf13/viper"
 	"os"
+	"io/ioutil"
 )
 
 type PlotPoint struct {
@@ -92,7 +93,7 @@ func handleIndicatorChart(w http.ResponseWriter, r *http.Request) {
 	err = bittrex.IsAPIAlive()
 	if err != nil {
 		fmt.Println("Can not reach Bittrex API servers: ", err)
-		panic(err)
+		// panic(err)
 	}
 		
 	candleSticks, err := bittrex.GetTicks(market, "fiveMin")
@@ -136,7 +137,7 @@ func handleTraderStart(w http.ResponseWriter, r *http.Request) {
 	err := bittrex.IsAPIAlive()
 	if err != nil {
 		fmt.Println("Can not reach Bittrex API servers: ", err)
-		panic(err)
+		//panic(err)
 	}
 	
 	viper.SetConfigType("json")
@@ -159,19 +160,55 @@ func handleTraderStart(w http.ResponseWriter, r *http.Request) {
 func handleStrategyTest(w http.ResponseWriter, r *http.Request) {
 	market := r.URL.Query().Get("market")
 	
-	err := bittrex.IsAPIAlive()
-	if err != nil {
-		fmt.Println("Can not reach Bittrex API servers: ", err)
-		panic(err)
-	}
+	viper.SetConfigType("json")
+	file, err := os.Open("config/config.json")
+	if err != nil { panic("Config file does not exist.") }	
+	viper.ReadConfig(file)
 
-	// get data
-	candleSticks, err := bittrex.GetTicks(market, "fiveMin")
-	if err != nil {
-		fmt.Println("ERROR OCCURRED: ", err)
-		panic(err)
+	config := viper.GetStringMapString("exchanges.bittrex")
+
+
+	if config["connection_check"] == "Y" {
+		err := bittrex.IsAPIAlive()
+		if err != nil {
+			fmt.Println("Can not reach Bittrex API servers: ", err)
+			panic(err)
+		}
 	}
 	
+	// get data
+	var candleSticks bittrex.CandleSticks
+	if false {
+		candleSticks, err = bittrex.GetTicks(market, "fiveMin")
+		if err != nil {
+			fmt.Println("ERROR OCCURRED: ", err)
+			panic(err)
+		}
+
+		// dump to a file
+		go func(cs *bittrex.CandleSticks) {
+			jsonResponse, _ := json.Marshal(cs)
+			fmt.Fprintf(w, string(jsonResponse))
+			err := ioutil.WriteFile("./testbeds/tb1.json", jsonResponse, 0644)
+			if err != nil {
+				fmt.Println(err)
+			}
+		}(&candleSticks)
+
+	} else {
+		dat, err := ioutil.ReadFile("./testbeds/tb1.json")
+		if err != nil {
+			fmt.Println("ERROR OCCURRED: ", err)
+			panic(err)
+		}
+		fmt.Print(string(dat))
+		err = json.Unmarshal(dat, &candleSticks)
+		fmt.Println(err)
+	}
+	
+	fmt.Print(candleSticks)
+		
+
 	// test through it
 	var result TestingResult
 	var lastPrice float64 = 0
