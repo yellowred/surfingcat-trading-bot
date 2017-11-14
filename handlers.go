@@ -2,7 +2,8 @@ package main
 
 import (
 	"fmt"
-	"github.com/thebotguys/golang-bittrex-api/bittrex"
+	"github.com/yellowred/golang-bittrex-api/bittrex"
+	bittrexPrivate "github.com/toorop/go-bittrex"
 	"github.com/markcheno/go-talib"
 	"time"
 	"net/http"
@@ -156,6 +157,19 @@ func handleTraderStart(w http.ResponseWriter, r *http.Request) {
 	jsonResponse, _ := json.Marshal("OK")
 	fmt.Fprintf(w, string(jsonResponse))
 }
+
+
+func handleTraderCheck(w http.ResponseWriter, r *http.Request) {
+	client := bittrexPrivate.New(BittrexApiKeys())
+
+	balances, err := client.GetBalances()
+	if err != nil {
+		fmt.Println("ERROR OCCURRED: ", err)
+	}
+	jsonResponse, _ := json.Marshal(balances)
+	fmt.Fprintf(w, string(jsonResponse))
+}
+
 
 func handleStrategyTest(w http.ResponseWriter, r *http.Request) {
 	market := r.URL.Query().Get("market")

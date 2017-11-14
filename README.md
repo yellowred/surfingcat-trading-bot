@@ -11,3 +11,4 @@ Welcome!
 
 - Running trading strategy: `curl "http://localhost:3026/trader/start?market=USDT-BTC&strategy=dip"`
 - Running backtest `curl "http://localhost:3026/strategy/test?market=USDT-BTC"`
+- Running server locally `BITTREX_PUBLIC_KEY=<PBK> BITTREX_PRIVATE_KEY=<PVK> go run *.go`

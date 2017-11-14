@@ -2,10 +2,12 @@ package main
 
 import (
 	"fmt"
-	"github.com/thebotguys/golang-bittrex-api/bittrex"
+	"github.com/yellowred/golang-bittrex-api/bittrex"
+	bittrexPrivate "github.com/toorop/go-bittrex"
 	"github.com/markcheno/go-talib"
 	"math"
 	"time"
+	"strings"
 )
 
 type MarketAction struct {
@@ -143,11 +145,27 @@ func strategyDip(market string, candles *bittrex.CandleSticks, lastAction *Marke
 
 func performMarketAction(marketAction MarketAction) {
 	if marketAction.Action == MarketActionBuy {
+		
 		marketSummary, _ := bittrex.GetMarketSummary(marketAction.Market)
-		fmt.Println("WMA crossed, action: BUY", ", price:", marketSummary.Ask)
+		fmt.Println("WMA crossed, action: BUY", marketAction.Market, marketSummary.Ask)
+
+		client := bittrexPrivate.New(BittrexApiKeys())
+		tickers := strings.Split(marketAction.Market, "-")
+		balance, _ := client.GetBalance(tickers[0])
+		uuid, _ := client.BuyLimit(marketAction.Market, balance.Available, marketSummary.Ask)
+		fmt.Println("Order submitted:", uuid, marketAction.Market, marketSummary.Ask)
+		
 	} else if marketAction.Action == MarketActionSell {
+		
 		marketSummary, _ := bittrex.GetMarketSummary(marketAction.Market)
-		fmt.Println("WMA crossed, action: SELL", ", price:", marketSummary.Bid)
+		fmt.Println("WMA crossed, action: SELL", marketAction.Market, marketSummary.Bid)
+
+		client := bittrexPrivate.New(BittrexApiKeys())
+		tickers := strings.Split(marketAction.Market, "-")
+		balance, _ := client.GetBalance(tickers[1])
+		uuid, _ := client.SellLimit(marketAction.Market, balance.Available, marketSummary.Bid)
+		fmt.Println("Order submitted:", uuid, marketAction.Market, marketSummary.Bid)
+
 	} else {
 		fmt.Println("Unknown action:", marketAction.Action)
 	}

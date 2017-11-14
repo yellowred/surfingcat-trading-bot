@@ -5,6 +5,7 @@ import App from './App'
 import Home from '@/components/Home'
 import Login from '@/components/Login'
 import Signup from '@/components/Signup'
+import Balance from '@/components/Balance'
 import SecretQuote from '@/components/SecretQuote'
 import UserInfo from '@/components/UserInfo'
 
@@ -48,6 +49,11 @@ const router = new VueRouter({
       path: '/signup',
       name: 'signup',
       component: Signup
+    },
+    {
+      path: '/balance',
+      name: 'balance',
+      component: Balance
     },
     {
       path: '/secretquote',
