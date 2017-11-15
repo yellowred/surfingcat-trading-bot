@@ -141,16 +141,9 @@ func handleTraderStart(w http.ResponseWriter, r *http.Request) {
 		//panic(err)
 	}
 	
-	viper.SetConfigType("json")
-	file, err := os.Open("config/trading.json")
-	if err != nil { panic("Config file does not exist.") }	
-	viper.ReadConfig(file)
-
-	config := viper.GetStringMapString("strategies." + strategy)
-
 	switch strategy {
-	case "wma": go Begin(market, config, strategyWma)
-	case "dip": go Begin(market, config, strategyDip)
+	case "wma": go Begin(market, StrategyConfig(strategy), strategyWma, ExchangeClient(EXCHANGE_PROVIDER_BITTREX, ExchangeConfig(EXCHANGE_PROVIDER_BITTREX)))
+	case "dip": go Begin(market, StrategyConfig(strategy), strategyDip, ExchangeClient(EXCHANGE_PROVIDER_BITTREX, ExchangeConfig(EXCHANGE_PROVIDER_BITTREX)))
 	default: panic("Unrecognized strategy.")
 	}
 	

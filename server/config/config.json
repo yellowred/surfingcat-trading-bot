@@ -1,7 +1,7 @@
 {
   "exchanges": {
     "bittrex": {
-      "connection_check": "N" 
+      "connection_check": "N"
     }
   }
 }

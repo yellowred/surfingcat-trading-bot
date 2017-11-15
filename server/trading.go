@@ -2,8 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/yellowred/golang-bittrex-api/bittrex"
-	bittrexPrivate "github.com/toorop/go-bittrex"
 	"github.com/markcheno/go-talib"
 	"math"
 	"time"
@@ -35,59 +33,89 @@ type TestingResult struct {
 	FinalBalance float64
 }
 
-func Begin(market string, config map[string]string, strategy func(string, *bittrex.CandleSticks, *MarketAction) *MarketAction) {
-	// periods -> ["oneMin", "fiveMin", "thirtyMin", "hour", "day"]
-	candleSticks, err := bittrex.GetTicks(market, config["interval"])
-	if err != nil {
-		fmt.Println("ERROR OCCURRED: ", err)
-		panic(err)
-	}
+type TradingBot struct {
+	market string
+	tradingConfig map[string]string
+	strategy func(string, *[]CandleStick, *MarketAction) *MarketAction
+	exchangeProvider ExchangeProvider
+	candles []CandleStick
+	lastAction MarketAction
+}
 
-	fmt.Println("Trading started at", time.Now().String())
-	tickSource := make(chan bittrex.CandleStick)
-	var lastAction MarketAction
+func (p TradingBot) Start() {
+	// pre-shot
+	p.marketAction()
 
-	marketAction := strategy(market, &candleSticks, &lastAction)
-	if marketAction != nil {
-		performMarketAction(*marketAction)
-	}
+	tickSource := make(chan CandleStick)
 	for {
 		select {
 			case <-time.After(30 * time.Second):
 				fmt.Println("Tick", market, time.Now().String())
-				go nextTick(market, &candleSticks, &tickSource)
-			case <-tickSource:
-				marketAction := strategy(market, &candleSticks, &lastAction)
-				if marketAction != nil {
-					performMarketAction(*marketAction)
+
+				candleStick, err := p.exchangeProvider.LastCandleStick(market, config["interval"])
+				if err != nil {
+					fmt.Println("Latest stick was not received: ", err)
+				} else {
+					fmt.Println("Latest tick", temp[len(temp)-1], "New tick", candleStick)
+					if (temp[len(temp)-1].Timestamp != candleStick.Timestamp) {
+						*tickSource <- *candleStick
+					}
 				}
+			case <-tickSource:
+				temp := append(*candles, *candleStick)
+				*candles = temp[len(temp)-1000:] //take 1000 values
+				p.marketAction()
 		}
+	}
+
+}
+
+func (p TradingBot) marketAction() {
+	marketAction := p.strategy(p.market, &p.candles, &p.lastAction)
+	if marketAction != nil {
+		p.performMarketAction(*marketAction)
 	}
 }
 
-func nextTick(market string, candles *bittrex.CandleSticks, tickSource *chan bittrex.CandleStick) {
-	candleStick, err := bittrex.GetLatestTick(market, "fiveMin")
-	if err != nil {
-		fmt.Println("Latest stick was not received: ", err)
+func (p TradingBot) performMarketAction(action MarketAction) {
+	marketSummary, _ := p.exchangeProvider.MarketSummary(action.Market)
+	tickers := strings.Split(action.Market, "-")
+
+	if action.Action == MarketActionBuy {		
+		amount := amountToOrder(p.tradingConfig["limit_buy"], tickers[0], p.exchangeProvider)
+		uuid, _ := p.exchangeProvider.BuyLimit(action.Market, amount, marketSummary.Ask)
+		fmt.Println("Order submitted:", uuid, action.Market, marketSummary.Ask)
+	} else if marketAction.Action == MarketActionSell {
+		amount := amountToOrder(p.tradingConfig["limit_sell"], tickers[1], p.exchangeProvider)
+		uuid, _ := p.exchangeProvider.SellLimit(action.Market, amount, marketSummary.Bid)
+		fmt.Println("Order submitted:", uuid, action.Market, marketSummary.Bid)
 	} else {
-		temp := *candles
-		fmt.Println("Latest tick", temp[len(temp)-1])
-		fmt.Println("New tick", candleStick)
-		if (temp[len(temp)-1].Timestamp != candleStick.Timestamp) {
-			temp = append(temp, *candleStick)
-			*candles = temp[len(temp)-1000:] //take 1000 values
-			*tickSource <- *candleStick
-		}
+		fmt.Println("Unknown action:", action.Action)
 	}
 }
+
+func Begin(market string, config map[string]string, strategy func(string, *[]CandleStick, *MarketAction) *MarketAction, exchangeProvider ExchangeProvider) {
+
+	// periods -> ["oneMin", "fiveMin", "thirtyMin", "hour", "day"]
+	candleSticks, err := exchangeProvider.GetTicks(market, config["interval"])
+	if err != nil {
+		fmt.Println("ERROR OCCURRED: ", err)
+		panic(err)
+	}
+	bot := TradingBot{market, config, strategy, exchangeProvider, candleSticks}
+
+	bot.Start()
+	fmt.Println("Trading started at", time.Now().String())
+}
+
 
 const MIN_PRICE_SPIKE float64 = 50
 const MIN_PRICE_DIP float64 = 90
 
-func strategyWma(market string, candles *bittrex.CandleSticks, lastAction *MarketAction) *MarketAction {
+func strategyWma(market string, candles *[]CandleStick, lastAction *MarketAction, config map[string]string) *MarketAction {
 	closes := valuesFromCandles(*candles)
-	indicatorData1 := talib.Wma(closes, 50)
-	indicatorData2 := talib.Wma(closes, 20)
+	indicatorData1 := talib.Wma(closes, config["wma_max"])
+	indicatorData2 := talib.Wma(closes, config["wma_min"])
 
 	// if we have a position then we would like to take profits
 	if lastAction != nil && lastAction.Action == MarketActionBuy && LastFloat(closes) > LastFloat(indicatorData2) + MIN_PRICE_SPIKE {
@@ -124,10 +152,10 @@ func strategyWma(market string, candles *bittrex.CandleSticks, lastAction *Marke
 	return nil
 }
 
-func strategyDip(market string, candles *bittrex.CandleSticks, lastAction *MarketAction) *MarketAction {
+func strategyDip(market string, candles *[]CandleStick, lastAction *MarketAction, config map[string]string) *MarketAction {
 	closes := valuesFromCandles(*candles)
-	// indicatorData1 := talib.Wma(closes, 50)
-	indicatorData2 := talib.Wma(closes, 20)
+	// indicatorData1 := talib.Wma(closes, config["wma_max"])
+	indicatorData2 := talib.Wma(closes, config["wma_min"])
 
 	// if we have a position then we would like to take profits
 	if lastAction != nil && lastAction.Action == MarketActionBuy && LastFloat(closes) > LastFloat(indicatorData2) + MIN_PRICE_SPIKE {
@@ -142,33 +170,14 @@ func strategyDip(market string, candles *bittrex.CandleSticks, lastAction *Marke
 	return nil
 }
 
-
-func performMarketAction(marketAction MarketAction) {
-	if marketAction.Action == MarketActionBuy {
-		
-		marketSummary, _ := bittrex.GetMarketSummary(marketAction.Market)
-		fmt.Println("WMA crossed, action: BUY", marketAction.Market, marketSummary.Ask)
-
-		client := bittrexPrivate.New(BittrexApiKeys())
-		tickers := strings.Split(marketAction.Market, "-")
-		balance, _ := client.GetBalance(tickers[0])
-		uuid, _ := client.BuyLimit(marketAction.Market, balance.Available, marketSummary.Ask)
-		fmt.Println("Order submitted:", uuid, marketAction.Market, marketSummary.Ask)
-		
-	} else if marketAction.Action == MarketActionSell {
-		
-		marketSummary, _ := bittrex.GetMarketSummary(marketAction.Market)
-		fmt.Println("WMA crossed, action: SELL", marketAction.Market, marketSummary.Bid)
-
-		client := bittrexPrivate.New(BittrexApiKeys())
-		tickers := strings.Split(marketAction.Market, "-")
-		balance, _ := client.GetBalance(tickers[1])
-		uuid, _ := client.SellLimit(marketAction.Market, balance.Available, marketSummary.Bid)
-		fmt.Println("Order submitted:", uuid, marketAction.Market, marketSummary.Bid)
-
-	} else {
-		fmt.Println("Unknown action:", marketAction.Action)
+func amountToOrder(limit float64, ticker string, client ExchangeProvider) float64 {
+	amountToOrder := config["limit_sell"]
+	balance, err := client.Balance(tickers[1]);
+	handleTradingError(err)
+	if balance.Available < amountToOrder {
+		amountToOrder = balance.Available
 	}
+	return amountToOrder
 }
 
 func valuesFromCandles(candleSticks bittrex.CandleSticks) []float64 {
@@ -190,6 +199,14 @@ func stringInSlice(a string, list []string) bool {
 
 func LastFloat(arr []float64) float64 {
 	return arr[len(arr) - 1]
+}
+
+
+func handleTradingError(err error) {
+	if err != nil {
+		fmt.Println("Trading error: ", err)
+		panic(err)
+	}
 }
 //Strategies
 // Floor finder

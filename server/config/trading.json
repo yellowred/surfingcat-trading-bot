@@ -3,12 +3,14 @@
     "wma": {
       "interval": "oneMin",
       "wma_max": 50,
-      "wma_min": 20
+      "wma_min": 20,
+      "limit_buy": 0.1
     },
     "dip": {
       "interval": "oneMin",
       "wma_max": 50,
-      "wma_min": 20
+      "wma_min": 20,
+      "limit_sell": 0.1
     }
   }
 }
