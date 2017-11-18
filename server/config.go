@@ -21,19 +21,19 @@ func env(key, fallback string) string {
 	return value
 }
 
-func StrategyConfig(name string) (map[string]string, error) {
+func StrategyConfig(name string) map[string]string {
 	viper.SetConfigType("json")
 	file, err := os.Open("config/trading.json")
-	if err != nil { return nil, err }	
+	if err != nil { panic(err) }	
 	viper.ReadConfig(file)
-	return viper.GetStringMapString("strategies." + name), nil
+	return viper.GetStringMapString("strategies." + name)
 }
 
-func ExchangeConfig(name string) (map[string]string, error) {
+func ExchangeConfig(name string) map[string]string {
 	viper.SetConfigType("json")
 	file, err := os.Open("config/config.json")
-	if err != nil { return nil, err }	
+	if err != nil { panic(err) }	
 	viper.ReadConfig(file)
-	return viper.GetStringMapString("exchanges." + name), nil
+	return viper.GetStringMapString("exchanges." + name)
 }
 

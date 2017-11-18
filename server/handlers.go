@@ -9,8 +9,6 @@ import (
 	"net/http"
 	"strconv"
 	"encoding/json"
-	"github.com/spf13/viper"
-	"os"
 	"io/ioutil"
 )
 
@@ -141,13 +139,26 @@ func handleTraderStart(w http.ResponseWriter, r *http.Request) {
 		//panic(err)
 	}
 	
+	var uuid string
 	switch strategy {
-	case "wma": go Begin(market, StrategyConfig(strategy), strategyWma, ExchangeClient(EXCHANGE_PROVIDER_BITTREX, ExchangeConfig(EXCHANGE_PROVIDER_BITTREX)))
-	case "dip": go Begin(market, StrategyConfig(strategy), strategyDip, ExchangeClient(EXCHANGE_PROVIDER_BITTREX, ExchangeConfig(EXCHANGE_PROVIDER_BITTREX)))
+	case "wma": uuid = Begin(market, StrategyConfig(strategy), strategyWma, ExchangeClient(EXCHANGE_PROVIDER_BITTREX, ExchangeConfig(EXCHANGE_PROVIDER_BITTREX)))
+	case "dip": uuid = Begin(market, StrategyConfig(strategy), strategyDip, ExchangeClient(EXCHANGE_PROVIDER_BITTREX, ExchangeConfig(EXCHANGE_PROVIDER_BITTREX)))
 	default: panic("Unrecognized strategy.")
 	}
 	
-	jsonResponse, _ := json.Marshal("OK")
+	jsonResponse, _ := json.Marshal(uuid)
+	fmt.Fprintf(w, string(jsonResponse))
+}
+
+
+func handleTraderStop(w http.ResponseWriter, r *http.Request) {
+	uuid := r.URL.Query().Get("uuid")
+
+	if traderCh, ok := traders[uuid]; ok {
+		traderCh <- ServerMessage{uuid, ServerMessageActionStop}
+		close(traderCh)
+	}
+	jsonResponse, _ := json.Marshal(uuid)
 	fmt.Fprintf(w, string(jsonResponse))
 }
 
@@ -167,40 +178,28 @@ func handleTraderCheck(w http.ResponseWriter, r *http.Request) {
 func handleStrategyTest(w http.ResponseWriter, r *http.Request) {
 	market := r.URL.Query().Get("market")
 	
-	viper.SetConfigType("json")
-	file, err := os.Open("config/config.json")
-	if err != nil { panic("Config file does not exist.") }	
-	viper.ReadConfig(file)
 
-	config := viper.GetStringMapString("exchanges.bittrex")
-
-
-	if config["connection_check"] == "Y" {
-		err := bittrex.IsAPIAlive()
-		if err != nil {
-			fmt.Println("Can not reach Bittrex API servers: ", err)
-			panic(err)
-		}
-	}
+	btx := ExchangeClient(EXCHANGE_PROVIDER_BITTREX, ExchangeConfig(EXCHANGE_PROVIDER_BITTREX))
 	
 	// get data
-	var candleSticks bittrex.CandleSticks
+	var candleSticks []CandleStick
+	var err error
 	if false {
-		candleSticks, err = bittrex.GetTicks(market, "fiveMin")
+		candleSticks, err = btx.AllCandleSticks(market, "fiveMin")
 		if err != nil {
 			fmt.Println("ERROR OCCURRED: ", err)
 			panic(err)
 		}
 
 		// dump to a file
-		go func(cs *bittrex.CandleSticks) {
+		go func(cs []CandleStick) {
 			jsonResponse, _ := json.Marshal(cs)
 			fmt.Fprintf(w, string(jsonResponse))
 			err := ioutil.WriteFile("./testbeds/tb1.json", jsonResponse, 0644)
 			if err != nil {
 				fmt.Println(err)
 			}
-		}(&candleSticks)
+		}(candleSticks)
 
 	} else {
 		dat, err := ioutil.ReadFile("./testbeds/tb1.json")
@@ -224,7 +223,7 @@ func handleStrategyTest(w http.ResponseWriter, r *http.Request) {
 
 	for i := 0; i <= len(candleSticks) - 1000; i++ {
 		t := candleSticks[0:1000+i]
-		marketAction := strategyDip(market, &t, &lastAction)
+		marketAction := strategyDip(market, &t, &lastAction, StrategyConfig("dip"))
 		if (marketAction != nil) {
 			result.Actions = append(result.Actions, TestingResultAction{marketAction.Action, marketAction.Market, marketAction.Price, marketAction.Time.String()})
 			if (marketAction.Action == MarketActionBuy) {

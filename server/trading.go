@@ -6,6 +6,8 @@ import (
 	"math"
 	"time"
 	"strings"
+	"strconv"
+	uuid "github.com/satori/go.uuid"
 )
 
 type MarketAction struct {
@@ -35,43 +37,54 @@ type TestingResult struct {
 
 type TradingBot struct {
 	market string
+	uuid string
+	c chan ServerMessage
 	tradingConfig map[string]string
-	strategy func(string, *[]CandleStick, *MarketAction) *MarketAction
+	strategy func(string, *[]CandleStick, *MarketAction, map[string]string) *MarketAction
 	exchangeProvider ExchangeProvider
 	candles []CandleStick
-	lastAction MarketAction
+	lastAction *MarketAction
 }
 
 func (p TradingBot) Start() {
+	defer close(p.c)
+
 	// pre-shot
 	p.marketAction()
 
-	tickSource := make(chan CandleStick)
+	ticker := time.NewTicker(30 * time.Second)
+L:
 	for {
 		select {
-			case <-time.After(30 * time.Second):
-				fmt.Println("Tick", market, time.Now().String())
-
-				candleStick, err := p.exchangeProvider.LastCandleStick(market, config["interval"])
+			case <-ticker.C:
+				fmt.Println("Tick", p.market, time.Now().String())
+				candleStick, err := p.exchangeProvider.LastCandleStick(p.market, p.tradingConfig["interval"])
 				if err != nil {
 					fmt.Println("Latest stick was not received: ", err)
 				} else {
-					fmt.Println("Latest tick", temp[len(temp)-1], "New tick", candleStick)
-					if (temp[len(temp)-1].Timestamp != candleStick.Timestamp) {
-						*tickSource <- *candleStick
+					fmt.Println("Latest tick", p.candles[len(p.candles)-1], "New tick", candleStick)
+					if p.candles[len(p.candles)-1].Timestamp != candleStick.Timestamp {
+						fmt.Println("Timestamps different, send the candle")
+						temp := append(p.candles, candleStick)
+						p.candles = temp[len(temp)-1000:] //take 1000 values
+						p.marketAction()
 					}
 				}
-			case <-tickSource:
-				temp := append(*candles, *candleStick)
-				*candles = temp[len(temp)-1000:] //take 1000 values
-				p.marketAction()
+			case msg := <- p.c:
+				if msg.Uuid == p.uuid {
+					if msg.Action == ServerMessageActionStop {
+						fmt.Println("Execution STOP", p.uuid)
+						ticker.Stop()
+						break L
+					}
+				}
 		}
 	}
 
 }
 
 func (p TradingBot) marketAction() {
-	marketAction := p.strategy(p.market, &p.candles, &p.lastAction)
+	marketAction := p.strategy(p.market, &p.candles, p.lastAction, p.tradingConfig)
 	if marketAction != nil {
 		p.performMarketAction(*marketAction)
 	}
@@ -82,48 +95,56 @@ func (p TradingBot) performMarketAction(action MarketAction) {
 	tickers := strings.Split(action.Market, "-")
 
 	if action.Action == MarketActionBuy {		
-		amount := amountToOrder(p.tradingConfig["limit_buy"], tickers[0], p.exchangeProvider)
-		uuid, _ := p.exchangeProvider.BuyLimit(action.Market, amount, marketSummary.Ask)
+		amount := amountToOrder(str2flo(p.tradingConfig["limit_buy"]), tickers[0], p.exchangeProvider)
+		uuid, _ := p.exchangeProvider.Buy(action.Market, amount, marketSummary.Ask)
 		fmt.Println("Order submitted:", uuid, action.Market, marketSummary.Ask)
-	} else if marketAction.Action == MarketActionSell {
-		amount := amountToOrder(p.tradingConfig["limit_sell"], tickers[1], p.exchangeProvider)
-		uuid, _ := p.exchangeProvider.SellLimit(action.Market, amount, marketSummary.Bid)
+	} else if action.Action == MarketActionSell {
+		amount := amountToOrder(str2flo(p.tradingConfig["limit_sell"]), tickers[1], p.exchangeProvider)
+		uuid, _ := p.exchangeProvider.Sell(action.Market, amount, marketSummary.Bid)
 		fmt.Println("Order submitted:", uuid, action.Market, marketSummary.Bid)
 	} else {
 		fmt.Println("Unknown action:", action.Action)
 	}
 }
 
-func Begin(market string, config map[string]string, strategy func(string, *[]CandleStick, *MarketAction) *MarketAction, exchangeProvider ExchangeProvider) {
+func Begin(market string, config map[string]string, strategy func(string, *[]CandleStick, *MarketAction, map[string]string) *MarketAction, exchangeProvider ExchangeProvider) string {
 
 	// periods -> ["oneMin", "fiveMin", "thirtyMin", "hour", "day"]
-	candleSticks, err := exchangeProvider.GetTicks(market, config["interval"])
+	candleSticks, err := exchangeProvider.AllCandleSticks(market, config["interval"])
 	if err != nil {
 		fmt.Println("ERROR OCCURRED: ", err)
 		panic(err)
 	}
-	bot := TradingBot{market, config, strategy, exchangeProvider, candleSticks}
+	
+	uuid := uuid.NewV4().String()
+	traders[uuid] = make(chan ServerMessage)
+	bot := TradingBot{market, uuid, traders[uuid], config, strategy, exchangeProvider, candleSticks, nil}
 
-	bot.Start()
-	fmt.Println("Trading started at", time.Now().String())
+	go bot.Start()
+	fmt.Println("Trading started at", time.Now().String()," UUID:", uuid)
+	return uuid
 }
 
 
-const MIN_PRICE_SPIKE float64 = 50
-const MIN_PRICE_DIP float64 = 90
-
 func strategyWma(market string, candles *[]CandleStick, lastAction *MarketAction, config map[string]string) *MarketAction {
-	closes := valuesFromCandles(*candles)
-	indicatorData1 := talib.Wma(closes, config["wma_max"])
-	indicatorData2 := talib.Wma(closes, config["wma_min"])
+	closes := valuesFromCandles(candles)
+	
+	wmaMax, err := strconv.Atoi(config["wma_max"])
+	handleTradingError(err)
+	wmaMin, err := strconv.Atoi(config["wma_min"])
+	handleTradingError(err)
+	minPriceSpike := str2flo(config["min_price_spike"])
+	minPriceDip := str2flo(config["min_price_dip"])
+	indicatorData1 := talib.Wma(closes, wmaMax)
+	indicatorData2 := talib.Wma(closes, wmaMin)
 
 	// if we have a position then we would like to take profits
-	if lastAction != nil && lastAction.Action == MarketActionBuy && LastFloat(closes) > LastFloat(indicatorData2) + MIN_PRICE_SPIKE {
+	if lastAction != nil && lastAction.Action == MarketActionBuy && LastFloat(closes) > LastFloat(indicatorData2) + minPriceSpike {
 		return &MarketAction{MarketActionSell, market, LastFloat(closes), time.Time((*candles)[len(*candles)-1].Timestamp)}
 	}
 
 	// if we see some dip we might buy it
-	if LastFloat(closes) < LastFloat(indicatorData2) - MIN_PRICE_DIP {
+	if LastFloat(closes) < LastFloat(indicatorData2) - minPriceDip {
 		return &MarketAction{MarketActionBuy, market, LastFloat(closes), time.Time((*candles)[len(*candles)-1].Timestamp)}
 	}
 	
@@ -153,26 +174,32 @@ func strategyWma(market string, candles *[]CandleStick, lastAction *MarketAction
 }
 
 func strategyDip(market string, candles *[]CandleStick, lastAction *MarketAction, config map[string]string) *MarketAction {
-	closes := valuesFromCandles(*candles)
+	wmaMin, err := strconv.Atoi(config["wma_min"])
+	handleTradingError(err)
+	minPriceSpike := str2flo(config["min_price_spike"])
+	minPriceDip := str2flo(config["min_price_dip"])
+
+	closes := valuesFromCandles(candles)
 	// indicatorData1 := talib.Wma(closes, config["wma_max"])
-	indicatorData2 := talib.Wma(closes, config["wma_min"])
+	indicatorData2 := talib.Wma(closes, wmaMin)
 
 	// if we have a position then we would like to take profits
-	if lastAction != nil && lastAction.Action == MarketActionBuy && LastFloat(closes) > LastFloat(indicatorData2) + MIN_PRICE_SPIKE {
+	if lastAction != nil && lastAction.Action == MarketActionBuy && LastFloat(closes) > LastFloat(indicatorData2) + minPriceSpike {
 		return &MarketAction{MarketActionSell, market, LastFloat(closes), time.Time((*candles)[len(*candles)-1].Timestamp)}
 	}
 
 	// if we see some dip we might buy it
-	if LastFloat(closes) < LastFloat(indicatorData2) - MIN_PRICE_DIP {
+	if LastFloat(closes) < LastFloat(indicatorData2) - minPriceDip {
 		return &MarketAction{MarketActionBuy, market, LastFloat(closes), time.Time((*candles)[len(*candles)-1].Timestamp)}
 	}
 
+	fmt.Println("No trading action", LastFloat(closes), LastFloat(indicatorData2))
 	return nil
 }
 
 func amountToOrder(limit float64, ticker string, client ExchangeProvider) float64 {
-	amountToOrder := config["limit_sell"]
-	balance, err := client.Balance(tickers[1]);
+	amountToOrder := limit
+	balance, err := client.Balance(ticker);
 	handleTradingError(err)
 	if balance.Available < amountToOrder {
 		amountToOrder = balance.Available
@@ -180,9 +207,9 @@ func amountToOrder(limit float64, ticker string, client ExchangeProvider) float6
 	return amountToOrder
 }
 
-func valuesFromCandles(candleSticks bittrex.CandleSticks) []float64 {
+func valuesFromCandles(candleSticks *[]CandleStick) []float64 {
 	var closes []float64
-	for _, candle := range candleSticks {
+	for _, candle := range *candleSticks {
 		closes = append(closes, candle.Close)
 	}
 	return closes
@@ -201,6 +228,11 @@ func LastFloat(arr []float64) float64 {
 	return arr[len(arr) - 1]
 }
 
+func str2flo(arg string) float64 {
+	r, err := strconv.ParseFloat(arg, 64)
+	handleTradingError(err)
+	return r
+}
 
 func handleTradingError(err error) {
 	if err != nil {

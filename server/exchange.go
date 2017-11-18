@@ -58,45 +58,52 @@ type MarketSummary struct {
 	Ask            float64 `json:"Ask,required"`            // The current lowest ask value for the market.
 	Volume         float64 `json:"Volume,required"`         // The 24h volume of the market, in market currency.
 	BaseVolume     float64 `json:"BaseVolume,required"`     // The 24h volume for the market, in base currency.
-	Timestamp      string  `json:"Timestamp,required"`      // The timestamp of the request.
-	OpenBuyOrders  uint64  `json:"OpenBuyOrders,required"`  // The number of currently open buy orders.
-	OpenSellOrders uint64  `json:"OpenSellOrders,required"` // The number of currently open sell orders.
-	PrevDay        float64 `json:"PrevDay,required"`        // The closing price 24h before.
-	Created        string  `json:"Created,required"`        // The timestamp of the creation of the market.
 }
 
 type ExchangeProvider interface {
 	
-	Balances() []Balance
+	Balances() ([]Balance, error)
 
-	Balance(ticker string) Balance
+	Balance(ticker string) (Balance, error)
 
-	Buy(ticker string, amount float64, rate float64) string
+	Buy(ticker string, amount float64, rate float64) (string, error)
 
-	Sell(ticker string, amount float64, rate float64) string
+	Sell(ticker string, amount float64, rate float64) (string, error)
 
 	Name() string
 
-	AllCandleSticks(market string, interval string) []CandleStick
+	AllCandleSticks(market string, interval string) ([]CandleStick, error)
 
-	LastCandleStick(market string, interval string) CandleStick
+	LastCandleStick(market string, interval string) (CandleStick, error)
 
-	MarketSummary(market string, interval string) MarketSummary
+	MarketSummary(market string) (MarketSummary, error)
 }
 
 const EXCHANGE_PROVIDER_BITTREX = "bittrex"
 
 type ExchangeProviderBittrex struct {
-	client bittrexPrivate.Bittrex
+	client *bittrexPrivate.Bittrex
 	config map[string]string
 }
 
 func (p ExchangeProviderBittrex) Balances() ([]Balance, error) {
-	return p.client.GetBalances()
+	var balances []Balance
+	balancesBittrex, err := p.client.GetBalances()
+	if err != nil {
+		return nil, err
+	}
+	for _, bln := range balancesBittrex  {
+		balances = append(balances, Balance{bln.Currency, bln.Balance, bln.Available, bln.Pending, bln.CryptoAddress, bln.Requested, bln.Uuid})
+	}
+	return balances, nil
 }
 
-func (p ExchangeProviderBittrex) Balance(ticker string) Balance {
-	return p.client.GetBalance(ticker)
+func (p ExchangeProviderBittrex) Balance(ticker string) (Balance, error) {
+	bln, err := p.client.GetBalance(ticker)
+	if err != nil {
+		return Balance{}, err
+	}
+	return Balance{bln.Currency, bln.Balance, bln.Available, bln.Pending, bln.CryptoAddress, bln.Requested, bln.Uuid}, nil
 }
 
 func (p ExchangeProviderBittrex) Buy(ticker string, amount float64, rate float64) (string, error) {
@@ -111,20 +118,51 @@ func (p ExchangeProviderBittrex) Name() string {
 	return EXCHANGE_PROVIDER_BITTREX
 }
 
-func (p ExchangeProviderBittrex) AllCandleSticks(market string, interval string) []CandleStick {
-	return bittrexTicks.GetTicks(market, interval)
+func (p ExchangeProviderBittrex) AllCandleSticks(market string, interval string) ([]CandleStick, error) {
+	var res []CandleStick
+	rBittrex, err := bittrexTicks.GetTicks(market, interval)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rBittrex  {
+		t := candleTime{}
+		rtJson, err := r.Timestamp.MarshalJSON()
+		if err != nil {
+			return nil, err
+		}
+		t.UnmarshalJSON(rtJson)
+		res = append(res, CandleStick{r.High, r.Open, r.Close, r.Low, r.Volume, r.BaseVolume, t})
+	}
+	return res, nil
 }
 
-func (p ExchangeProviderBittrex) LastCandleStick(market string, interval string) []CandleStick {
-	return bittrexTicks.GetTick(market)
+func (p ExchangeProviderBittrex) LastCandleStick(market string, interval string) (CandleStick, error) {
+	rBittrex, err := bittrexTicks.GetLatestTick(market, interval)
+	if err != nil {
+		return CandleStick{}, err
+	}
+	t := candleTime{}
+	rtJson, err := rBittrex.Timestamp.MarshalJSON()
+	if err != nil {
+		return CandleStick{}, err
+	}
+	t.UnmarshalJSON(rtJson)
+	return CandleStick{rBittrex.High, rBittrex.Open, rBittrex.Close, rBittrex.Low, rBittrex.Volume, rBittrex.BaseVolume, t}, nil
 }
 
-func (p ExchangeProviderBittrex) MarketSummary(market string, interval string) []CandleStick {
-	return bittrexTicks.GetTicks(market, interval)
+func (p ExchangeProviderBittrex) MarketSummary(market string) (MarketSummary, error) {
+	r, err := bittrexTicks.GetMarketSummary(market)
+	if err != nil {
+		return MarketSummary{}, err
+	}
+	return MarketSummary{r.MarketName, r.High, r.Low, r.Last, r.Bid, r.Ask, r.Volume, r.BaseVolume}, nil
 }
 
 func ExchangeClient(name string, config map[string]string) ExchangeProvider {
 	if name == EXCHANGE_PROVIDER_BITTREX {
-		return ExchangeProviderBittrex{bittrexPrivate.New(BittrexApiKeys()), config}
+		c := bittrexPrivate.New(BittrexApiKeys())
+		return ExchangeProviderBittrex{c, config}
+	} else {
+		panic(fmt.Sprintf("Unknown exchange provider: %s", name))
 	}
 }
