@@ -29,7 +29,7 @@ You are welcomed to fork or/and contribute.
 
 - Running server locally 
     - `cd server`
-    - ``BITTREX_PUBLIC_KEY=7624154e94934c04a80577999705321a BITTREX_PRIVATE_KEY=ea052709017d46e28f76f26a552538e3 go run `ls *.go | grep -v _test.go` ``
+    - ``BITTREX_PUBLIC_KEY=<pbk> BITTREX_PRIVATE_KEY=<pvk> go run `ls *.go | grep -v _test.go` ``
 - Running frontend 
     - `npm run dev`
 
