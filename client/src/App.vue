@@ -16,6 +16,7 @@
         <ul class="nav navbar-nav">
           <li><router-link to="home">Home</router-link></li>
           <li><router-link to="balance">Balance</router-link></li>
+          <li><router-link to="testbed">Testbed</router-link></li>
           <li v-if="!isAuthenticated()"><router-link to="login">Login</router-link></li>
           <li v-if="!isAuthenticated()"><router-link to="signup">Sign Up</router-link></li>
           <li v-if="isAuthenticated()"><router-link to="secretquote">Secret Quote</router-link></li>

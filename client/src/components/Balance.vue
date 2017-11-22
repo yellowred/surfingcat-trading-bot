@@ -17,7 +17,7 @@ export default {
   },
   methods: {
     getQuote () {
-      this.$http.get('http://localhost:3026/trader/check')
+      this.$http.get('http://localhost:3026/trader/balance')
       .then(response => {
         this.balances = response.body
       }, response => {

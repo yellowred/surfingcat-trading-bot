@@ -6,6 +6,7 @@ import Home from '@/components/Home'
 import Login from '@/components/Login'
 import Signup from '@/components/Signup'
 import Balance from '@/components/Balance'
+import Testbed from '@/components/Testbed'
 import SecretQuote from '@/components/SecretQuote'
 import UserInfo from '@/components/UserInfo'
 
@@ -49,6 +50,11 @@ const router = new VueRouter({
       path: '/signup',
       name: 'signup',
       component: Signup
+    },
+    {
+      path: '/testbed',
+      name: 'testbed',
+      component: Testbed
     },
     {
       path: '/balance',
