@@ -3,13 +3,17 @@ package main
 import (
 	"fmt"
 	"github.com/yellowred/golang-bittrex-api/bittrex"
-	bittrexPrivate "github.com/toorop/go-bittrex"
 	"github.com/markcheno/go-talib"
 	"time"
 	"net/http"
 	"strconv"
 	"encoding/json"
 	"io/ioutil"
+	"github.com/yellowred/surfingcat-trading-bot/server/exchange"
+	configManager "github.com/yellowred/surfingcat-trading-bot/server/config"
+	trading "github.com/yellowred/surfingcat-trading-bot/server/trading"
+	message "github.com/yellowred/surfingcat-trading-bot/server/message"
+	"github.com/yellowred/surfingcat-trading-bot/server/utils"
 )
 
 type PlotPoint struct {
@@ -80,7 +84,7 @@ func handleEmaBtcUsd(w http.ResponseWriter, r *http.Request) {
 
 func handleIndicatorChart(w http.ResponseWriter, r *http.Request) {
 	indicator := r.URL.Query().Get("name")
-	if !stringInSlice(indicator, []string{"ema", "wma", "trima", "rsi", "httrendline"}) {
+	if !utils.StringInSlice(indicator, []string{"ema", "wma", "trima", "rsi", "httrendline"}) {
 		panic("indicator is not recognized")
 	}
 	market := r.URL.Query().Get("market") //"USDT-BTC"
@@ -139,21 +143,32 @@ func handleTraderStart(w http.ResponseWriter, r *http.Request) {
 		//panic(err)
 	}
 	
-	var uuid string
-	switch strategy {
-	case "wma": uuid = Begin(market, StrategyConfig(strategy), strategyWma, ExchangeClient(EXCHANGE_PROVIDER_BITTREX, ExchangeConfig(EXCHANGE_PROVIDER_BITTREX)))
-	case "dip": uuid = Begin(market, StrategyConfig(strategy), strategyDip, ExchangeClient(EXCHANGE_PROVIDER_BITTREX, ExchangeConfig(EXCHANGE_PROVIDER_BITTREX)))
-	default: panic("Unrecognized strategy.")
-	}
-	
-	jsonResponse, _ := json.Marshal(uuid)
+	bot := trading.NewBot(market, strategy, configManager.StrategyConfig(strategy), exchange.ExchangeClient(exchange.EXCHANGE_PROVIDER_BITTREX, configManager.ExchangeConfig(exchange.EXCHANGE_PROVIDER_BITTREX)))
+	go bot.Start()
+	jsonResponse, _ := json.Marshal(bot.Uuid)
 	fmt.Fprintf(w, string(jsonResponse))
 }
 
 
 func handleTraderStop(w http.ResponseWriter, r *http.Request) {
 	uuid := r.URL.Query().Get("uuid")
+	err := message.StopTrader(uuid)
+	if err != nil {
+		jsonResponse, _ := json.Marshal(err)
+		fmt.Fprintf(w, string(jsonResponse))
+	} else {
+		jsonResponse, _ := json.Marshal(uuid)
+		fmt.Fprintf(w, string(jsonResponse))
+	}
+}
 
+
+/*
+func handleTraderList(w http.ResponseWriter, r *http.Request) {
+
+	for uuid, ch := range traders {
+
+	}
 	if traderCh, ok := traders[uuid]; ok {
 		traderCh <- ServerMessage{uuid, ServerMessageActionStop}
 		close(traderCh)
@@ -161,28 +176,46 @@ func handleTraderStop(w http.ResponseWriter, r *http.Request) {
 	jsonResponse, _ := json.Marshal(uuid)
 	fmt.Fprintf(w, string(jsonResponse))
 }
-
+*/
 
 func handleTraderCheck(w http.ResponseWriter, r *http.Request) {
-	client := bittrexPrivate.New(BittrexApiKeys())
-
-	balances, err := client.GetBalances()
+	client := exchange.ExchangeClient(exchange.EXCHANGE_PROVIDER_BITTREX, configManager.ExchangeConfig(exchange.EXCHANGE_PROVIDER_BITTREX))
+	// uuid, err := client.Buy("USDT-BTC", 0.001, 6000)
+	// uuid, err := client.Sell("BTC-FCT", 1, 0.01)
+	m, err := client.MarketSummary("USDT-BTC")
 	if err != nil {
 		fmt.Println("ERROR OCCURRED: ", err)
 	}
-	jsonResponse, _ := json.Marshal(balances)
+	jsonResponse, _ := json.Marshal(m)
 	fmt.Fprintf(w, string(jsonResponse))
 }
 
 
+func handleTraderBalance(w http.ResponseWriter, r *http.Request) {
+	client := exchange.ExchangeClient(exchange.EXCHANGE_PROVIDER_BITTREX, configManager.ExchangeConfig(exchange.EXCHANGE_PROVIDER_BITTREX))
+	m, err := client.Balances()
+	if err != nil {
+		fmt.Println("ERROR OCCURRED: ", err)
+	}
+	jsonResponse, _ := json.Marshal(m)
+	fmt.Fprintf(w, string(jsonResponse))
+}
+
+
+type TestingResult struct {
+	Actions []exchange.TestMarketAction
+	Balances []exchange.Balance
+}
+
 func handleStrategyTest(w http.ResponseWriter, r *http.Request) {
 	market := r.URL.Query().Get("market")
+	strategy := r.URL.Query().Get("strategy")
 	
 
-	btx := ExchangeClient(EXCHANGE_PROVIDER_BITTREX, ExchangeConfig(EXCHANGE_PROVIDER_BITTREX))
+	btx := exchange.ExchangeClient(exchange.EXCHANGE_PROVIDER_BITTREX, configManager.ExchangeConfig(exchange.EXCHANGE_PROVIDER_BITTREX))
 	
 	// get data
-	var candleSticks []CandleStick
+	var candleSticks []exchange.CandleStick
 	var err error
 	if false {
 		candleSticks, err = btx.AllCandleSticks(market, "fiveMin")
@@ -192,7 +225,7 @@ func handleStrategyTest(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// dump to a file
-		go func(cs []CandleStick) {
+		go func(cs []exchange.CandleStick) {
 			jsonResponse, _ := json.Marshal(cs)
 			fmt.Fprintf(w, string(jsonResponse))
 			err := ioutil.WriteFile("./testbeds/tb1.json", jsonResponse, 0644)
@@ -212,36 +245,102 @@ func handleStrategyTest(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(err)
 	}
 	
-	fmt.Print(candleSticks)
+	// fmt.Print(candleSticks)
 		
 
-	// test through it
-	var result TestingResult
-	var lastPrice float64 = 0
-	var bottomLine float64 = 0
-	var lastAction MarketAction
+	
+	config := configManager.StrategyConfig(strategy)
+	config["refresh_frequency"] = "1"
+	config["executeAsync"] = "N"
+	config["limit_buy"] = "10000"
+	config["limit_sell"] = "10000"
 
-	for i := 0; i <= len(candleSticks) - 1000; i++ {
-		t := candleSticks[0:1000+i]
-		marketAction := strategyDip(market, &t, &lastAction, StrategyConfig("dip"))
-		if (marketAction != nil) {
-			result.Actions = append(result.Actions, TestingResultAction{marketAction.Action, marketAction.Market, marketAction.Price, marketAction.Time.String()})
-			if (marketAction.Action == MarketActionBuy) {
-				lastPrice = marketAction.Price
-			} else if marketAction.Action == MarketActionSell {
-				if lastPrice > 0 {
-					bottomLine = bottomLine + marketAction.Price - lastPrice
-					lastPrice = 0
-					result.Balances = append(result.Balances, PlotPoint{time.Time(marketAction.Time).String(), strconv.FormatFloat(bottomLine, 'f', 6, 64)})
-				}
-			}
-		}
-	}
+	
+	client := exchange.NewExchangeProviderFake(&candleSticks, config)
+	fmt.Println(client.Balances())
 
-	result.FinalBalance = bottomLine
-	jsonResponse, _ := json.Marshal(result)
+	bot := trading.NewBot(market, strategy, config, client)
+	
+	uuid := bot.Uuid
+	client.OnEnd(func(){
+		fmt.Println("STOP")
+		message.StopTrader(uuid)
+	})
+	bot.Start()
+	fmt.Println(client.Balances())
+	bln,_ := client.Balances()
+	jsonResponse, _ := json.Marshal(TestingResult{client.Actions, bln})
 	fmt.Fprintf(w, string(jsonResponse))
 }
+
+
+func handleTestbedChart(w http.ResponseWriter, r *http.Request) {
+	var candleSticks []exchange.CandleStick
+	dat, err := ioutil.ReadFile("./testbeds/tb1.json")
+	if err != nil {
+		fmt.Println("ERROR OCCURRED: ", err)
+		panic(err)
+	}
+	fmt.Print(string(dat))
+	err = json.Unmarshal(dat, &candleSticks)
+	fmt.Println(err)
+	
+	var res PlotPoints
+	for _, candle := range candleSticks {
+		res = append(res, PlotPoint{time.Time(candle.Timestamp).String(), strconv.FormatFloat(candle.Close, 'f', 6, 64)})
+	}
+
+	jsonResponse, _ := json.Marshal(res)
+	fmt.Fprintf(w, string(jsonResponse))
+}
+
+
+func handleTestbedIndicatorChart(w http.ResponseWriter, r *http.Request) {
+	indicator := r.URL.Query().Get("name")
+	if !utils.StringInSlice(indicator, []string{"ema", "wma", "trima", "rsi", "httrendline"}) {
+		panic("indicator is not recognized")
+	}
+	interval, err := strconv.Atoi(r.URL.Query().Get("interval"))
+
+	var candleSticks []exchange.CandleStick
+	dat, err := ioutil.ReadFile("./testbeds/tb1.json")
+	if err != nil {
+		fmt.Println("ERROR OCCURRED: ", err)
+		panic(err)
+	}
+	fmt.Print(string(dat))
+	err = json.Unmarshal(dat, &candleSticks)
+	fmt.Println(err)
+	
+	var closes []float64
+	for _, candle := range candleSticks {
+		closes = append(closes, candle.Close)
+	}	
+	
+	
+	var indicatorData []float64
+
+	fmt.Println("Indicator: ", indicator, interval)
+	
+	switch indicator {
+	case "ema": indicatorData = talib.Ema(closes, interval)
+	case "wma": indicatorData = talib.Wma(closes, interval)
+	case "trima": indicatorData = talib.Trima(closes, interval)
+	case "rsi": indicatorData = talib.Rsi(closes, interval)
+	case "httrendline": indicatorData = talib.HtTrendline(closes)
+	}
+	
+
+	var res PlotPoints
+	for i, indicatorValue := range indicatorData {
+		res = append(res, PlotPoint{time.Time(candleSticks[i].Timestamp).String(), strconv.FormatFloat(indicatorValue, 'f', 6, 64)})
+	}
+
+	jsonResponse, _ := json.Marshal(res)
+	fmt.Fprintf(w, string(jsonResponse))
+}
+
+
 //Strategies
 // Floor finder
 // Pump resolver

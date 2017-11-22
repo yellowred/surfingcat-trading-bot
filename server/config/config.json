@@ -1,7 +1,8 @@
 {
   "exchanges": {
     "bittrex": {
-      "connection_check": "N"
+      "connection_check": "N",
+      "hide_zero_balances": "Y"
     }
   }
 }

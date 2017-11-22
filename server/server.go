@@ -5,20 +5,9 @@ import (
 	"net/http"
 	"github.com/urfave/negroni"
 	"github.com/rs/cors"
+	configManager "github.com/yellowred/surfingcat-trading-bot/server/config"
 )
 
-const (
-	ServerMessageActionStop = iota
-	ServerMessageActionPause = iota
-	ServerMessageActionResume = iota
-)
-
-type ServerMessage struct {
-	Uuid string
-	Action int
-}
-
-var traders map[string] chan ServerMessage
 
 func main() {
 	startServer()
@@ -27,7 +16,6 @@ func main() {
 
 func startServer() {
 
-	traders = make(map[string] chan ServerMessage)
 	mux := http.NewServeMux()
 	
 	mux.HandleFunc("/ema/usdbtc", handleEmaBtcUsd)
@@ -36,7 +24,10 @@ func startServer() {
 	mux.HandleFunc("/trader/start", handleTraderStart)
 	mux.HandleFunc("/trader/stop", handleTraderStop)
 	mux.HandleFunc("/trader/check", handleTraderCheck)
+	mux.HandleFunc("/trader/balance", handleTraderBalance)
 	mux.HandleFunc("/strategy/test", handleStrategyTest)
+	mux.HandleFunc("/chart/testbed", handleTestbedChart)
+	mux.HandleFunc("/indicator/testbed", handleTestbedIndicatorChart)
 
 	c := cors.New(cors.Options{
 		AllowedOrigins: []string{"*"},
@@ -48,6 +39,6 @@ func startServer() {
 
 
 
-	fmt.Printf("Starting to listen on %s...\n", ApiPort())
-	http.ListenAndServe(":" + ApiPort(), n)
+	fmt.Printf("Starting to listen on %s...\n", configManager.ApiPort())
+	http.ListenAndServe(":" + configManager.ApiPort(), n)
 }
