@@ -7,13 +7,14 @@ import (
 	"time"
 	"net/http"
 	"strconv"
+	"strings"
 	"encoding/json"
-	"io/ioutil"
 	"github.com/yellowred/surfingcat-trading-bot/server/exchange"
 	configManager "github.com/yellowred/surfingcat-trading-bot/server/config"
 	trading "github.com/yellowred/surfingcat-trading-bot/server/trading"
-	message "github.com/yellowred/surfingcat-trading-bot/server/message"
 	"github.com/yellowred/surfingcat-trading-bot/server/utils"
+	"sort"
+	"io/ioutil"
 )
 
 type PlotPoint struct {
@@ -143,7 +144,7 @@ func handleTraderStart(w http.ResponseWriter, r *http.Request) {
 		//panic(err)
 	}
 	
-	bot := trading.NewBot(market, strategy, configManager.StrategyConfig(strategy), exchange.ExchangeClient(exchange.EXCHANGE_PROVIDER_BITTREX, configManager.ExchangeConfig(exchange.EXCHANGE_PROVIDER_BITTREX)))
+	bot := trading.NewBot(market, strategy, configManager.StrategyConfig(strategy), exchange.ExchangeClient(exchange.EXCHANGE_PROVIDER_BITTREX, configManager.ExchangeConfig(exchange.EXCHANGE_PROVIDER_BITTREX)), traderStore)
 	go bot.Start()
 	jsonResponse, _ := json.Marshal(bot.Uuid)
 	fmt.Fprintf(w, string(jsonResponse))
@@ -152,14 +153,9 @@ func handleTraderStart(w http.ResponseWriter, r *http.Request) {
 
 func handleTraderStop(w http.ResponseWriter, r *http.Request) {
 	uuid := r.URL.Query().Get("uuid")
-	err := message.StopTrader(uuid)
-	if err != nil {
-		jsonResponse, _ := json.Marshal(err)
-		fmt.Fprintf(w, string(jsonResponse))
-	} else {
-		jsonResponse, _ := json.Marshal(uuid)
-		fmt.Fprintf(w, string(jsonResponse))
-	}
+	traderStore.Del(uuid)
+	jsonResponse, _ := json.Marshal(uuid)
+	fmt.Fprintf(w, string(jsonResponse))
 }
 
 
@@ -206,7 +202,6 @@ type TestingResult struct {
 	Actions []exchange.TestMarketAction
 	Balances []exchange.Balance
 }
-
 func handleStrategyTest(w http.ResponseWriter, r *http.Request) {
 	market := r.URL.Query().Get("market")
 	strategy := r.URL.Query().Get("strategy")
@@ -228,21 +223,19 @@ func handleStrategyTest(w http.ResponseWriter, r *http.Request) {
 		go func(cs []exchange.CandleStick) {
 			jsonResponse, _ := json.Marshal(cs)
 			fmt.Fprintf(w, string(jsonResponse))
-			err := ioutil.WriteFile("./testbeds/tb1.json", jsonResponse, 0644)
+			err := ioutil.WriteFile("./testbeds/tb2.json", jsonResponse, 0644)
 			if err != nil {
 				fmt.Println(err)
 			}
 		}(candleSticks)
 
 	} else {
-		dat, err := ioutil.ReadFile("./testbeds/tb1.json")
+		dat, err := ioutil.ReadFile("./testbeds/btcfct1.json")
 		if err != nil {
 			fmt.Println("ERROR OCCURRED: ", err)
 			panic(err)
 		}
-		fmt.Print(string(dat))
 		err = json.Unmarshal(dat, &candleSticks)
-		fmt.Println(err)
 	}
 	
 	// fmt.Print(candleSticks)
@@ -255,16 +248,16 @@ func handleStrategyTest(w http.ResponseWriter, r *http.Request) {
 	config["limit_buy"] = "10000"
 	config["limit_sell"] = "10000"
 
-	
-	client := exchange.NewExchangeProviderFake(&candleSticks, config)
+	tickers := strings.Split(market, "-")
+	client := exchange.NewExchangeProviderFake(&candleSticks, config, map[string]float64{tickers[0]: 1, tickers[1]: 0})
 	fmt.Println(client.Balances())
 
-	bot := trading.NewBot(market, strategy, config, client)
+	bot := trading.NewBot(market, strategy, config, client, traderStore)
 	
 	uuid := bot.Uuid
 	client.OnEnd(func(){
 		fmt.Println("STOP")
-		message.StopTrader(uuid)
+		traderStore.Del(uuid)
 	})
 	bot.Start()
 	fmt.Println(client.Balances())
@@ -273,18 +266,14 @@ func handleStrategyTest(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, string(jsonResponse))
 }
 
-
 func handleTestbedChart(w http.ResponseWriter, r *http.Request) {
 	var candleSticks []exchange.CandleStick
-	dat, err := ioutil.ReadFile("./testbeds/tb1.json")
-	if err != nil {
-		fmt.Println("ERROR OCCURRED: ", err)
-		panic(err)
-	}
-	fmt.Print(string(dat))
-	err = json.Unmarshal(dat, &candleSticks)
-	fmt.Println(err)
 	
+	market := r.URL.Query().Get("market")
+	dat := configManager.TestbedFile(market)
+	err := json.Unmarshal(dat, &candleSticks)
+	utils.HandleError(err)
+
 	var res PlotPoints
 	for _, candle := range candleSticks {
 		res = append(res, PlotPoint{time.Time(candle.Timestamp).String(), strconv.FormatFloat(candle.Close, 'f', 6, 64)})
@@ -303,15 +292,11 @@ func handleTestbedIndicatorChart(w http.ResponseWriter, r *http.Request) {
 	interval, err := strconv.Atoi(r.URL.Query().Get("interval"))
 
 	var candleSticks []exchange.CandleStick
-	dat, err := ioutil.ReadFile("./testbeds/tb1.json")
-	if err != nil {
-		fmt.Println("ERROR OCCURRED: ", err)
-		panic(err)
-	}
-	fmt.Print(string(dat))
+	market := r.URL.Query().Get("market")
+	dat := configManager.TestbedFile(market)
 	err = json.Unmarshal(dat, &candleSticks)
-	fmt.Println(err)
-	
+	utils.HandleError(err)
+
 	var closes []float64
 	for _, candle := range candleSticks {
 		closes = append(closes, candle.Close)
@@ -338,6 +323,96 @@ func handleTestbedIndicatorChart(w http.ResponseWriter, r *http.Request) {
 
 	jsonResponse, _ := json.Marshal(res)
 	fmt.Fprintf(w, string(jsonResponse))
+}
+
+
+func handleStrategySuperTest(w http.ResponseWriter, r *http.Request) {
+		
+	strategy := r.URL.Query().Get("strategy")
+	
+	// get data
+	var candleSticks []exchange.CandleStick
+	
+	market := r.URL.Query().Get("market")
+	dat := configManager.TestbedFile(market)
+	err := json.Unmarshal(dat, &candleSticks)
+	utils.HandleError(err)
+	market = configManager.TestbedMarket(market)
+	
+	config := configManager.StrategyConfig(strategy)
+	config["refresh_frequency"] = "1"
+	config["executeAsync"] = "N"
+	config["limit_buy"] = "10000"
+	config["limit_sell"] = "10000"
+	// config["window_size"] = "100"
+
+	/*config["wma_max"]: 50,
+	"wma_min": 20,
+	"limit_buy": 0.1,
+	"limit_sell": 0.1,
+	"min_price_spike": 50,
+	"min_price_dip": 50*/
+	start := time.Now()
+	total := 0
+	ch := make(chan map[string]string)
+	for _, wmaMax := range append(utils.ARange(10, 20, 2), utils.ARange(20, 100, 10)...) {
+	// for _, wmaMax := range utils.ARange(10, 20, 10) {	
+		for _, wmaMin := range append(utils.ARange(2, 10, 1), utils.ARange(10, 50, 5)...) {
+		// for _, wmaMin := range utils.ARange(10, 20, 10) {
+
+			testConfig := utils.CopyMapString(config)
+			testConfig["wma_max"] = strconv.FormatInt(wmaMax, 10)
+			testConfig["wma_min"] = strconv.FormatInt(wmaMin, 10)
+
+			if testConfig["wma_max"] > testConfig["wma_min"] {
+				total = total + 1		
+				go StrategyResult(strategy, market, candleSticks, testConfig, ch)
+			}
+			
+		}
+	}
+
+	// 47c89d79-3c47-42f2-a781-59a836c3df0d
+
+	var results []map[string]string
+
+	for i := 1; i<= total; i++ {
+		bln := <- ch
+		results = append(results, bln)
+	}
+
+	sort.Sort(utils.BySuperTestResult(results))
+
+	fmt.Println("**********************************\nResults:")
+	for _, item := range results {
+		fmt.Println(item["superTestResult"], item["wma_max"], item["wma_min"])
+	}
+	elapsed := time.Since(start)
+	fmt.Printf("Strategy evaluation took %s\n", elapsed)
+	
+	jsonResponse, _ := json.Marshal("OK")
+	fmt.Fprintf(w, string(jsonResponse))
+}
+
+func StrategyResult(strategy string, market string, candleSticks []exchange.CandleStick, conf map[string]string, ch chan map[string]string)  {
+	tickers := strings.Split(market, "-")
+	client := exchange.NewExchangeProviderFake(&candleSticks, conf, map[string]float64{tickers[0]: 1, tickers[1]: 0})
+
+	bot := trading.NewBot(market, strategy, conf, client, traderStore)
+	
+	uuid := bot.Uuid
+	client.OnEnd(func(){
+		fmt.Println("STOP")
+		traderStore.Del(uuid)
+	})
+	fmt.Println("****************************\nSTART BOT", bot.Uuid, conf, "****************************")
+	bot.Start()
+	fmt.Println("****************************\nFINISH BOT", bot.Uuid, conf, "****************************")
+	bln,_ := client.Balances()
+
+	result := bln[0].Available + bln[1].Available*candleSticks[len(candleSticks)-1].Close
+	conf["superTestResult"] = strconv.FormatFloat(result, 'f', -1, 64)
+	ch <- conf
 }
 
 

@@ -1,7 +1,7 @@
 package message
 
 import (
-	"errors"
+	"sync"
 )
 
 const (
@@ -15,33 +15,34 @@ type ServerMessage struct {
 	Action int
 }
 
-var traders map[string] chan ServerMessage
-
-func SeverMessageToTrader(uuid string, msg int) (bool, error) {
-	if traderCh, ok := traders[uuid]; ok {
-		traderCh <- ServerMessage{uuid, msg}
-		return ok, nil
-	} else {
-		return false, errors.New("Trader chan not found.")
-	}
+type TraderStore struct {
+	traders map[string] chan ServerMessage
+	mu sync.RWMutex
 }
 
-func NewChannelToTrader(uuid string) chan ServerMessage {
-	if traders == nil {
-		traders = make(map[string] chan ServerMessage)
-	}
-	if _, ok := traders[uuid]; ok {
+
+func (t *TraderStore) Add(uuid string)  chan ServerMessage {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if _, ok := t.traders[uuid]; ok {
 		panic("Trader channel already exists")
 	}
-	traders[uuid] = make(chan ServerMessage)
-	return traders[uuid]
+	t.traders[uuid] = make(chan ServerMessage)
+	return t.traders[uuid]
 }
 
-func StopTrader(uuid string) error {
-	if ok, err := SeverMessageToTrader(uuid, ServerMessageActionStop); ok {
-		close(traders[uuid])
-		return nil
-	} else {
-		return err
+
+func (t *TraderStore) Del(uuid string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if traderCh, ok := t.traders[uuid]; ok {
+		traderCh <- ServerMessage{uuid, ServerMessageActionStop}
+		close(t.traders[uuid])
+		delete(t.traders, uuid)
 	}
+}
+
+
+func NewTraderStore() *TraderStore {
+	return &TraderStore{traders: make(map[string] chan ServerMessage)}
 }

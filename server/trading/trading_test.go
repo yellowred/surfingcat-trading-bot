@@ -81,16 +81,14 @@ func TestTrading(t *testing.T) {
 			time3.UnmarshalJSON([]byte("2006-01-04T15:04:05"))
 
 			candles := []exchange.CandleStick{exchange.CandleStick{20, 10, 10, 1, 100, 100, *time1}, exchange.CandleStick{20, 10, 10, 1, 100, 100, *time2}, exchange.CandleStick{20, 10, 1, 1, 100, 100, *time3}}
-
 			marketAction := strategyDip(
 				"USDT-BTC",
 				&candles,
 				MarketAction{MarketActionIdle, "", 0, time.Now()},
-				map[string]string{"wma_min": "2", "min_price_spike": "1", "min_price_dip": "1"},
+				map[string]string{"wma_min": "2", "min_price_spike": "0.1", "min_price_dip": "0.1"},
 			)
 			g.Assert(marketAction.Action).Equal(MarketActionBuy)
 		})
-
 
 		g.It("Should not be a buy action if the dip is too shallow", func() {
 
@@ -101,13 +99,13 @@ func TestTrading(t *testing.T) {
 			time3 := new(exchange.CandleTime)
 			time3.UnmarshalJSON([]byte("2006-01-04T15:04:05"))
 
-			candles := []exchange.CandleStick{exchange.CandleStick{20, 10, 10, 1, 100, 100, *time1}, exchange.CandleStick{20, 10, 10, 1, 100, 100, *time2}, exchange.CandleStick{20, 10, 1, 1, 100, 100, *time3}}
+			candles := []exchange.CandleStick{exchange.CandleStick{20, 10, 10, 1, 100, 100, *time1}, exchange.CandleStick{20, 10, 10, 1, 100, 100, *time2}, exchange.CandleStick{20, 10, 5, 1, 100, 100, *time3}}
 
 			marketAction := strategyDip(
 				"USDT-BTC",
 				&candles,
 				MarketAction{MarketActionIdle, "", 0, time.Now()},
-				map[string]string{"wma_min": "2", "min_price_spike": "1", "min_price_dip": "3"},
+				map[string]string{"wma_min": "2", "min_price_spike": ".1", "min_price_dip": "0.7"},
 			)
 			g.Assert(marketAction.Action).Equal(MarketActionIdle)
 		})
@@ -128,7 +126,7 @@ func TestTrading(t *testing.T) {
 				"USDT-BTC",
 				&candles,
 				MarketAction{MarketActionBuy, "USDT-BTC", 10, time.Time(candles[1].Timestamp)},
-				map[string]string{"wma_min": "2", "min_price_spike": "1", "min_price_dip": "1"},
+				map[string]string{"wma_min": "2", "min_price_spike": "0.1", "min_price_dip": "0.1"},
 			)
 			g.Assert(marketAction.Action).Equal(MarketActionSell)
 		})
@@ -170,7 +168,8 @@ func TestTrading(t *testing.T) {
 
 			candles := []exchange.CandleStick{exchange.CandleStick{20, 10, 10, 1, 100, 100, *time1}, exchange.CandleStick{20, 10, 10, 1, 100, 100, *time2}, exchange.CandleStick{20, 10, 10, 1, 100, 100, *time3}}
 			
-			client := exchange.NewExchangeProviderFake(&candles, map[string]string{"history_size": "1"})
+			client := exchange.NewExchangeProviderFake(&candles, map[string]string{"history_size": "1"}, map[string]float64{"USDT": 1000, "BTC": 0})
+			traderStore := message.NewTraderStore()
 			bot := NewBot(
 				"USDT-BTC",
 				"dip",
@@ -179,11 +178,13 @@ func TestTrading(t *testing.T) {
 					"min_price_spike": "1", 
 					"min_price_dip": "1",
 					"refresh_frequency": "1",
+					"window_size": "3",
 				},
 				client,
+				traderStore,
 			)
 			client.OnEnd(func(){
-				message.StopTrader(bot.Uuid)
+				traderStore.Del(bot.Uuid)
 			})
 			
 			bot.Start()

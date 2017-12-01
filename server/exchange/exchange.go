@@ -24,12 +24,12 @@ type CandleStick struct {
 	Low        float64    `json:"L,required"`
 	Volume     float64    `json:"V,required"`
 	BaseVolume float64    `json:"BV,required"`
-	Timestamp  candleTime `json:"T,required"`
+	Timestamp  CandleTime `json:"T,required"`
 }
 
-type candleTime time.Time
+type CandleTime time.Time
 
-func (t *candleTime) UnmarshalJSON(b []byte) error {
+func (t *CandleTime) UnmarshalJSON(b []byte) error {
 	if len(b) < 2 {
 		return fmt.Errorf("could not parse time %s", string(b))
 	}
@@ -38,13 +38,13 @@ func (t *candleTime) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return fmt.Errorf("could not parse time: %v", err)
 	}
-	*t = candleTime(result)
+	*t = CandleTime(result)
 	return nil
 }
 
-func (t candleTime) MarshalJSON() ([]byte, error) {
+func (t *CandleTime) MarshalJSON() ([]byte, error) {
 	//do your serializing here
-	stamp := fmt.Sprintf("\"%s\"", time.Time(t).Format("2006-01-02T15:04:05"))
+	stamp := fmt.Sprintf("\"%s\"", time.Time(*t).Format("2006-01-02T15:04:05"))
     return []byte(stamp), nil
 }
 

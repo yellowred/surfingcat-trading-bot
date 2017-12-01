@@ -2,7 +2,8 @@
   "strategies": {
     "wma": {
       "interval": "oneMin",
-      "refresh_frequency": 30000,
+      "refresh_frequency": 30000000,
+      "window_size": 1000,
       "wma_max": 50,
       "wma_min": 20,
       "limit_buy": 0.1,
@@ -12,13 +13,14 @@
     },
     "dip": {
       "interval": "oneMin",
-      "refresh_frequency": 30000,
+      "refresh_frequency": 30000000,
+      "window_size": 1000,
       "wma_max": 80,
       "wma_min": 20,
       "limit_buy": 0.1,
       "limit_sell": 0.1,
-      "min_price_spike": 50,
-      "min_price_dip": 50
+      "min_price_spike": 0.008,
+      "min_price_dip": 0.008
     }
   }
 }

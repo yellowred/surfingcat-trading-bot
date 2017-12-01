@@ -8,7 +8,7 @@ import (
 	"strings"
 	"strconv"
 	"github.com/yellowred/surfingcat-trading-bot/server/exchange"
-	message "github.com/yellowred/surfingcat-trading-bot/server/message"
+	"github.com/yellowred/surfingcat-trading-bot/server/message"
 	uuidGen "github.com/satori/go.uuid"
 	"github.com/yellowred/surfingcat-trading-bot/server/utils"
 )
@@ -47,7 +47,9 @@ func (p *TradingBot) Start() {
 
 	frequency, err := strconv.Atoi(p.tradingConfig["refresh_frequency"])
 	handleTradingError(err)
-	ticker := time.NewTicker(time.Duration(frequency) * time.Millisecond)
+	windowSize, err := strconv.Atoi(p.tradingConfig["window_size"])
+	handleTradingError(err)
+	ticker := time.NewTicker(time.Duration(frequency) * time.Microsecond)
 L:
 	for {
 		select {
@@ -57,12 +59,13 @@ L:
 				if err != nil {
 					fmt.Println("Latest stick was not received: ", err)
 				} else {
-					fmt.Println("***********************************************")
-					fmt.Println("Latest tick", p.candles[len(p.candles)-1], "New tick", candleStick)
+					// fmt.Println("***********************************************")
+					// fmt.Println("Latest tick", p.candles[len(p.candles)-1], "New tick", candleStick)
 					if p.candles[len(p.candles)-1].Timestamp != candleStick.Timestamp {
-						fmt.Println("Timestamps different, send the candle")
+						// fmt.Println("Timestamps different, send the candle")
 						temp := append(p.candles, candleStick)
-						p.candles = temp[len(temp)-1000:] //take 1000 values
+						// fmt.Println(len(temp), windowSize)
+						p.candles = temp[len(temp)-windowSize:] //take windowSize values
 						p.marketAction()
 					}
 				}
@@ -72,12 +75,13 @@ L:
 					if msg.Action == message.ServerMessageActionStop {
 						fmt.Println("Execution STOP", p.Uuid)
 						ticker.Stop()
+						fmt.Println("Execution STOP 2", p.Uuid)
 						break L
 					}
 				}
 		}
 	}
-
+	fmt.Println("Execution STOP 3", p.Uuid)
 }
 
 func (p *TradingBot) marketAction() {
@@ -120,7 +124,7 @@ func (p *TradingBot) performMarketAction(action MarketAction) {
 }
 
 
-func NewBot(market string, strategy string, config map[string]string, exchangeProvider exchange.ExchangeProvider) TradingBot {
+func NewBot(market string, strategy string, config map[string]string, exchangeProvider exchange.ExchangeProvider, traderStore *message.TraderStore) TradingBot {
 
 	var strategyFunc func(string, *[]exchange.CandleStick, MarketAction, map[string]string) MarketAction
 	switch strategy {
@@ -135,7 +139,7 @@ func NewBot(market string, strategy string, config map[string]string, exchangePr
 		panic(err)
 	}
 	uuid := uuidGen.NewV4().String()
-	ch := message.NewChannelToTrader(uuid)
+	ch := traderStore.Add(uuid)
 	return TradingBot{market, uuid, ch, config, strategyFunc, exchangeProvider, candleSticks, MarketAction{MarketActionIdle, market, 0, time.Now()}}
 }
 
@@ -197,18 +201,18 @@ func strategyDip(market string, candles *[]exchange.CandleStick, lastAction Mark
 	// indicatorData1 := talib.Wma(closes, config["wma_max"])
 	indicatorData2 := talib.Wma(closes, wmaMin)
 
-	fmt.Println("Strategy: DIP", lastAction, utils.LastFloat(closes), utils.LastFloat(indicatorData2), minPriceDip, minPriceSpike)
+	// fmt.Println("Strategy: DIP", lastAction, utils.LastFloat(closes), utils.LastFloat(indicatorData2) + utils.LastFloat(indicatorData2)*minPriceSpike, minPriceDip, minPriceSpike)
 	// if we have a position then we would like to take profits
-	if (lastAction.Action == MarketActionBuy) && utils.LastFloat(closes) > utils.LastFloat(indicatorData2) + minPriceSpike {
+	if (lastAction.Action == MarketActionBuy) && utils.LastFloat(closes) > utils.LastFloat(indicatorData2) + utils.LastFloat(indicatorData2)*minPriceSpike {
 		return MarketAction{MarketActionSell, market, utils.LastFloat(closes), time.Time((*candles)[len(*candles)-1].Timestamp)}
 	}
 
 	// if we see some dip we might buy it
-	if (lastAction.Action == MarketActionSell || lastAction.Action == MarketActionIdle) && utils.LastFloat(closes) < utils.LastFloat(indicatorData2) - minPriceDip {
+	if (lastAction.Action == MarketActionSell || lastAction.Action == MarketActionIdle) && utils.LastFloat(closes) < utils.LastFloat(indicatorData2) - utils.LastFloat(indicatorData2)*minPriceDip {
 		return MarketAction{MarketActionBuy, market, utils.LastFloat(closes), time.Time((*candles)[len(*candles)-1].Timestamp)}
 	}
 
-	fmt.Println("No trading action", utils.LastFloat(closes), utils.LastFloat(indicatorData2))
+	// fmt.Println("No trading action", utils.LastFloat(closes), utils.LastFloat(indicatorData2), candles)
 	return MarketAction{MarketActionIdle, market, utils.LastFloat(closes), time.Time((*candles)[len(*candles)-1].Timestamp)}
 }
 

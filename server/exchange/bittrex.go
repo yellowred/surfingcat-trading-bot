@@ -52,7 +52,7 @@ func (p ExchangeProviderBittrex) AllCandleSticks(market string, interval string)
 		return nil, err
 	}
 	for _, r := range rBittrex  {
-		t := candleTime{}
+		t := CandleTime{}
 		rtJson, err := r.Timestamp.MarshalJSON()
 		if err != nil {
 			return nil, err
@@ -68,7 +68,7 @@ func (p ExchangeProviderBittrex) LastCandleStick(market string, interval string)
 	if err != nil {
 		return CandleStick{}, err
 	}
-	t := candleTime{}
+	t := CandleTime{}
 	rtJson, err := rBittrex.Timestamp.MarshalJSON()
 	if err != nil {
 		return CandleStick{}, err

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"time"
+	"strconv"
 )
 
 const HISTORY_SIZE = 1000
@@ -26,6 +27,7 @@ type ExchangeProviderFake struct {
 	balances map[string]float64
 	onEndCallback func()
 	Actions []TestMarketAction
+	historySize int
 }
 
 func (p *ExchangeProviderFake) Balances() ([]Balance, error) {
@@ -59,7 +61,7 @@ func (p *ExchangeProviderFake) Buy(market string, amount float64, rate float64) 
 		p.balances[tickers[1]] = p.balances[tickers[1]] + amount - amount * EXCHANGE_COMISSION 
 		p.balances[tickers[0]] = p.balances[tickers[0]] - amount * rate
 		
-		candle := (*p.testbed)[HISTORY_SIZE + p.index]
+		candle := (*p.testbed)[p.historySize + p.index]
 		p.Actions = append(p.Actions, TestMarketAction{0, rate, time.Time(candle.Timestamp).String()})
 		
 		uuid = "OK_" + market; err = nil 
@@ -86,7 +88,7 @@ func (p *ExchangeProviderFake) Sell(market string, amount float64, rate float64)
 		p.balances[tickers[1]] = p.balances[tickers[1]] - amount
 		p.balances[tickers[0]] = p.balances[tickers[0]] + amount * rate  - amount * rate * EXCHANGE_COMISSION
 		
-		candle := (*p.testbed)[HISTORY_SIZE + p.index]
+		candle := (*p.testbed)[p.historySize + p.index]
 		p.Actions = append(p.Actions, TestMarketAction{1, rate, time.Time(candle.Timestamp).String()})
 
 		uuid = "OK_" + market; err = nil
@@ -107,7 +109,7 @@ func (p *ExchangeProviderFake) AllCandleSticks(market string, interval string) (
 }
 
 func (p *ExchangeProviderFake) LastCandleStick(market string, interval string) (CandleStick, error) {
-	if p.index<len(*(p.testbed)) - HISTORY_SIZE - 1 {
+	if p.index<len(*(p.testbed)) - p.historySize - 1 {
 		p.index++
 		fmt.Println("Candle #", p.index)
 	} else {
@@ -115,7 +117,7 @@ func (p *ExchangeProviderFake) LastCandleStick(market string, interval string) (
 			go p.onEndCallback()
 		}
 	}
-	return (*p.testbed)[HISTORY_SIZE + p.index], nil
+	return (*p.testbed)[p.historySize + p.index], nil
 }
 
 func (p *ExchangeProviderFake) MarketSummary(market string) (MarketSummary, error) {
@@ -129,6 +131,15 @@ func (p *ExchangeProviderFake) OnEnd(cb func()) {
 	p.onEndCallback = cb
 }
 
-func NewExchangeProviderFake(testbed *[]CandleStick, config map[string]string) *ExchangeProviderFake {
-	return &ExchangeProviderFake{testbed, config, (*testbed)[0:HISTORY_SIZE], 0, map[string]float64{"USDT": 10000, "BTC": 0}, nil, nil}
+func NewExchangeProviderFake(testbed *[]CandleStick, config map[string]string, balances map[string]float64) *ExchangeProviderFake {
+	windowSize, _ := strconv.Atoi(config["window_size"]) // TODO remove concurrent access
+	historySize := windowSize
+	if HISTORY_SIZE < windowSize {
+		historySize = HISTORY_SIZE
+	}
+	
+	if _, ok := config["history_size"]; ok {
+		historySize, _ = strconv.Atoi(config["history_size"])
+	}
+	return &ExchangeProviderFake{testbed, config, (*testbed)[0:historySize], 0, balances, nil, nil, historySize}
 }

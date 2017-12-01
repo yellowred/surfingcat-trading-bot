@@ -1,0 +1,13 @@
+{
+    "dir": "./testbeds",
+    "files": {
+        "btcfct1": {
+            "name": "btcfct1.json",
+            "market": "BTC-FCT"
+        },
+        "usdtbtc1": {
+            "name": "tb1.json",
+            "market": "USDT-BTC"
+        }
+    }
+}

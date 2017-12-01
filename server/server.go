@@ -6,8 +6,10 @@ import (
 	"github.com/urfave/negroni"
 	"github.com/rs/cors"
 	configManager "github.com/yellowred/surfingcat-trading-bot/server/config"
+	"github.com/yellowred/surfingcat-trading-bot/server/message"
 )
 
+var traderStore *message.TraderStore
 
 func main() {
 	startServer()
@@ -17,7 +19,8 @@ func main() {
 func startServer() {
 
 	mux := http.NewServeMux()
-	
+	traderStore = message.NewTraderStore()
+
 	mux.HandleFunc("/ema/usdbtc", handleEmaBtcUsd)
 	mux.HandleFunc("/chart/usdbtc", handleChartBtcUsd)
 	mux.HandleFunc("/indicator", handleIndicatorChart)
@@ -26,9 +29,10 @@ func startServer() {
 	mux.HandleFunc("/trader/check", handleTraderCheck)
 	mux.HandleFunc("/trader/balance", handleTraderBalance)
 	mux.HandleFunc("/strategy/test", handleStrategyTest)
+	mux.HandleFunc("/strategy/supertest", handleStrategySuperTest)
 	mux.HandleFunc("/chart/testbed", handleTestbedChart)
 	mux.HandleFunc("/indicator/testbed", handleTestbedIndicatorChart)
-
+	
 	c := cors.New(cors.Options{
 		AllowedOrigins: []string{"*"},
 	})
