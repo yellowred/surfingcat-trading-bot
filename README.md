@@ -38,4 +38,5 @@ You are welcomed to fork or/and contribute.
 - Testbed chart `http://localhost:3026/chart/testbed`
 - Running an indicator on a testbed `http://localhost:3026/indicator/testbed?name=trima&market=USDT-BTC&interval=30`
 - Test a strategy on a testbed data `http://localhost:3026/strategy/test?market=USDT-BTC&strategy=dip`
+- Find the best peroforming strategy params `curl "http://localhost:3026/strategy/supertest?market=btcfct1&strategy=dip"`
 
