@@ -54,7 +54,7 @@ L:
 	for {
 		select {
 			case <-ticker.C:
-				fmt.Println("Tick", p.market, time.Now().String())
+				// fmt.Println("Tick", p.market, time.Now().String())
 				candleStick, err := p.exchangeProvider.LastCandleStick(p.market, p.tradingConfig["interval"])
 				if err != nil {
 					fmt.Println("Latest stick was not received: ", err)
@@ -70,18 +70,14 @@ L:
 					}
 				}
 			case msg := <- p.c:
-				fmt.Println(msg)
 				if msg.Uuid == p.Uuid {
 					if msg.Action == message.ServerMessageActionStop {
-						fmt.Println("Execution STOP", p.Uuid)
 						ticker.Stop()
-						fmt.Println("Execution STOP 2", p.Uuid)
 						break L
 					}
 				}
 		}
 	}
-	fmt.Println("Execution STOP 3", p.Uuid)
 }
 
 func (p *TradingBot) marketAction() {
@@ -133,14 +129,17 @@ func NewBot(market string, strategy string, config map[string]string, exchangePr
 	default: panic("Strategy is not recognized")
 	}
 	// periods -> ["oneMin", "fiveMin", "thirtyMin", "hour", "day"]
-	candleSticks, err := exchangeProvider.AllCandleSticks(market, config["interval"])
+	testConfig := utils.CopyMapString(config)
+	candleSticks, err := exchangeProvider.AllCandleSticks(market, testConfig["interval"])
 	if err != nil {
 		fmt.Println("ERROR OCCURRED: ", err)
 		panic(err)
 	}
 	uuid := uuidGen.NewV4().String()
 	ch := traderStore.Add(uuid)
-	return TradingBot{market, uuid, ch, config, strategyFunc, exchangeProvider, candleSticks, MarketAction{MarketActionIdle, market, 0, time.Now()}}
+
+	
+	return TradingBot{market, uuid, ch, testConfig, strategyFunc, exchangeProvider, candleSticks, MarketAction{MarketActionIdle, market, 0, time.Now()}}
 }
 
 
@@ -201,7 +200,7 @@ func strategyDip(market string, candles *[]exchange.CandleStick, lastAction Mark
 	// indicatorData1 := talib.Wma(closes, config["wma_max"])
 	indicatorData2 := talib.Wma(closes, wmaMin)
 
-	// fmt.Println("Strategy: DIP", lastAction, utils.LastFloat(closes), utils.LastFloat(indicatorData2) + utils.LastFloat(indicatorData2)*minPriceSpike, minPriceDip, minPriceSpike)
+	// fmt.Println(config["wma_max"], config["wma_min"], "Strategy: DIP", lastAction, utils.LastFloat(closes), utils.LastFloat(indicatorData2) + utils.LastFloat(indicatorData2)*minPriceSpike, minPriceDip, minPriceSpike)
 	// if we have a position then we would like to take profits
 	if (lastAction.Action == MarketActionBuy) && utils.LastFloat(closes) > utils.LastFloat(indicatorData2) + utils.LastFloat(indicatorData2)*minPriceSpike {
 		return MarketAction{MarketActionSell, market, utils.LastFloat(closes), time.Time((*candles)[len(*candles)-1].Timestamp)}

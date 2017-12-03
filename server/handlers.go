@@ -202,6 +202,7 @@ type TestingResult struct {
 	Actions []exchange.TestMarketAction
 	Balances []exchange.Balance
 }
+
 func handleStrategyTest(w http.ResponseWriter, r *http.Request) {
 	market := r.URL.Query().Get("market")
 	strategy := r.URL.Query().Get("strategy")
@@ -230,12 +231,10 @@ func handleStrategyTest(w http.ResponseWriter, r *http.Request) {
 		}(candleSticks)
 
 	} else {
-		dat, err := ioutil.ReadFile("./testbeds/btcfct1.json")
-		if err != nil {
-			fmt.Println("ERROR OCCURRED: ", err)
-			panic(err)
-		}
-		err = json.Unmarshal(dat, &candleSticks)
+		dat := configManager.TestbedFile(market)
+		err := json.Unmarshal(dat, &candleSticks)
+		utils.HandleError(err)
+		market = configManager.TestbedMarket(market)
 	}
 	
 	// fmt.Print(candleSticks)
@@ -248,21 +247,27 @@ func handleStrategyTest(w http.ResponseWriter, r *http.Request) {
 	config["limit_buy"] = "10000"
 	config["limit_sell"] = "10000"
 
-	tickers := strings.Split(market, "-")
-	client := exchange.NewExchangeProviderFake(&candleSticks, config, map[string]float64{tickers[0]: 1, tickers[1]: 0})
-	fmt.Println(client.Balances())
 
-	bot := trading.NewBot(market, strategy, config, client, traderStore)
+	start := time.Now()
+	ch := make(chan map[string]string)
+	testConfig := utils.CopyMapString(config)
+	testConfig["wma_max"] = "20"
+	testConfig["wma_min"] = "2"
+	go StrategyResult(strategy, market, candleSticks, testConfig, ch)
+
+	var results []map[string]string
+	item := <- ch
+	results = append(results, item)
+
+	fmt.Println("**********************************\nResults:")
+	for _, item := range results {
+		fmt.Println(item["wma_max"], item["wma_min"], item["superTestResult"])
+	}
 	
-	uuid := bot.Uuid
-	client.OnEnd(func(){
-		fmt.Println("STOP")
-		traderStore.Del(uuid)
-	})
-	bot.Start()
-	fmt.Println(client.Balances())
-	bln,_ := client.Balances()
-	jsonResponse, _ := json.Marshal(TestingResult{client.Actions, bln})
+	elapsed := time.Since(start)
+	fmt.Printf("Strategy evaluation took %s\n", elapsed)
+	
+	jsonResponse, _ := json.Marshal(results)
 	fmt.Fprintf(w, string(jsonResponse))
 }
 
@@ -356,15 +361,15 @@ func handleStrategySuperTest(w http.ResponseWriter, r *http.Request) {
 	total := 0
 	ch := make(chan map[string]string)
 	for _, wmaMax := range append(utils.ARange(10, 20, 2), utils.ARange(20, 100, 10)...) {
-	// for _, wmaMax := range utils.ARange(10, 20, 10) {	
+	// for _, wmaMax := range utils.ARange(80, 100, 10) {	
 		for _, wmaMin := range append(utils.ARange(2, 10, 1), utils.ARange(10, 50, 5)...) {
-		// for _, wmaMin := range utils.ARange(10, 20, 10) {
+		// for _, wmaMin := range utils.ARange(2, 4, 2) {
 
 			testConfig := utils.CopyMapString(config)
 			testConfig["wma_max"] = strconv.FormatInt(wmaMax, 10)
 			testConfig["wma_min"] = strconv.FormatInt(wmaMin, 10)
-
-			if testConfig["wma_max"] > testConfig["wma_min"] {
+			if wmaMax > wmaMin {
+				fmt.Println("ITERATE", wmaMax, wmaMin, testConfig, total)
 				total = total + 1		
 				go StrategyResult(strategy, market, candleSticks, testConfig, ch)
 			}
@@ -377,40 +382,67 @@ func handleStrategySuperTest(w http.ResponseWriter, r *http.Request) {
 	var results []map[string]string
 
 	for i := 1; i<= total; i++ {
-		bln := <- ch
-		results = append(results, bln)
+		item := <- ch
+		results = append(results, item)
 	}
 
 	sort.Sort(utils.BySuperTestResult(results))
 
 	fmt.Println("**********************************\nResults:")
 	for _, item := range results {
-		fmt.Println(item["superTestResult"], item["wma_max"], item["wma_min"])
+		fmt.Println(item["wma_max"], item["wma_min"], item["superTestResult"])
 	}
+	
+	matrix := make(map[string]map[string]string)
+	for _, item := range results {
+		// fmt.Println(item["superTestResult"], item["wma_max"], item["wma_min"])
+		if matrix[item["wma_max"]] == nil {
+			matrix[item["wma_max"]] = make(map[string]string)
+		}
+		matrix[item["wma_max"]][item["wma_min"]] = item["superTestResult"]
+	}
+
+	csv := ""
+	for _, wmaMax := range append(utils.ARange(10, 20, 2), utils.ARange(20, 100, 10)...) {
+			row := strconv.FormatInt(wmaMax, 10) + ","
+			for _, wmaMin := range append(utils.ARange(2, 10, 1), utils.ARange(10, 50, 5)...) {
+				wmaMaxS := strconv.FormatInt(wmaMax, 10)
+				wmaMinS := strconv.FormatInt(wmaMin, 10)
+				row = row + "," + matrix[wmaMaxS][wmaMinS] 
+			}
+			csv = csv + row + "\n"
+	}	
+	
+	fmt.Println("**********************************\nCSV:")
+	fmt.Println(csv)
+
 	elapsed := time.Since(start)
 	fmt.Printf("Strategy evaluation took %s\n", elapsed)
 	
-	jsonResponse, _ := json.Marshal("OK")
+	jsonResponse, _ := json.Marshal(matrix)
 	fmt.Fprintf(w, string(jsonResponse))
 }
 
 func StrategyResult(strategy string, market string, candleSticks []exchange.CandleStick, conf map[string]string, ch chan map[string]string)  {
 	tickers := strings.Split(market, "-")
-	client := exchange.NewExchangeProviderFake(&candleSticks, conf, map[string]float64{tickers[0]: 1, tickers[1]: 0})
+	client := exchange.NewExchangeProviderFake(candleSticks, conf, map[string]float64{tickers[0]: 1, tickers[1]: 0})
 
-	bot := trading.NewBot(market, strategy, conf, client, traderStore)
-	
+	bot := trading.NewBot(market, strategy, conf, &client, traderStore)
 	uuid := bot.Uuid
 	client.OnEnd(func(){
-		fmt.Println("STOP")
 		traderStore.Del(uuid)
 	})
-	fmt.Println("****************************\nSTART BOT", bot.Uuid, conf, "****************************")
+	fmt.Println("****************************\nSTART BOT", bot.Uuid, conf["wma_max"], conf["wma_min"], "****************************")
 	bot.Start()
-	fmt.Println("****************************\nFINISH BOT", bot.Uuid, conf, "****************************")
 	bln,_ := client.Balances()
+	jsonResponse, _ := json.Marshal(client.Actions)
+	fmt.Println("****************************\nFINISH BOT", bot.Uuid, conf["wma_max"], conf["wma_min"], bln, candleSticks[len(candleSticks)-1].Close, string(jsonResponse), "****************************")
 
 	result := bln[0].Available + bln[1].Available*candleSticks[len(candleSticks)-1].Close
+	if bln[0].Currency == tickers[1] {
+		result = bln[1].Available + bln[0].Available*candleSticks[len(candleSticks)-1].Close
+	}
+	
 	conf["superTestResult"] = strconv.FormatFloat(result, 'f', -1, 64)
 	ch <- conf
 }

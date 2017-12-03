@@ -58,3 +58,14 @@ func CopyMapString(originalMap map[string]string) map[string]string {
     }
     return targetMap
 }
+
+
+func CopyMapFloat(originalMap map[string]float64) map[string]float64 {
+    targetMap := make(map[string]float64)
+    for key, value := range originalMap {
+        targetMap[key] = value
+    }
+    return targetMap
+}
+
+

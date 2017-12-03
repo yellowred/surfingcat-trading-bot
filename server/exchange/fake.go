@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 	"strconv"
+	"github.com/yellowred/surfingcat-trading-bot/server/utils"
 )
 
 const HISTORY_SIZE = 1000
@@ -20,7 +21,7 @@ type TestMarketAction struct {
 
 
 type ExchangeProviderFake struct {
-	testbed *[]CandleStick
+	testbed []CandleStick
 	config map[string]string
 	candles []CandleStick
 	index int
@@ -61,7 +62,7 @@ func (p *ExchangeProviderFake) Buy(market string, amount float64, rate float64) 
 		p.balances[tickers[1]] = p.balances[tickers[1]] + amount - amount * EXCHANGE_COMISSION 
 		p.balances[tickers[0]] = p.balances[tickers[0]] - amount * rate
 		
-		candle := (*p.testbed)[p.historySize + p.index]
+		candle := p.testbed[p.historySize + p.index]
 		p.Actions = append(p.Actions, TestMarketAction{0, rate, time.Time(candle.Timestamp).String()})
 		
 		uuid = "OK_" + market; err = nil 
@@ -88,7 +89,7 @@ func (p *ExchangeProviderFake) Sell(market string, amount float64, rate float64)
 		p.balances[tickers[1]] = p.balances[tickers[1]] - amount
 		p.balances[tickers[0]] = p.balances[tickers[0]] + amount * rate  - amount * rate * EXCHANGE_COMISSION
 		
-		candle := (*p.testbed)[p.historySize + p.index]
+		candle := p.testbed[p.historySize + p.index]
 		p.Actions = append(p.Actions, TestMarketAction{1, rate, time.Time(candle.Timestamp).String()})
 
 		uuid = "OK_" + market; err = nil
@@ -109,19 +110,17 @@ func (p *ExchangeProviderFake) AllCandleSticks(market string, interval string) (
 }
 
 func (p *ExchangeProviderFake) LastCandleStick(market string, interval string) (CandleStick, error) {
-	if p.index<len(*(p.testbed)) - p.historySize - 1 {
+	if p.index<len(p.testbed) - p.historySize - 1 {
 		p.index++
-		fmt.Println("Candle #", p.index)
 	} else {
 		if p.onEndCallback != nil {
 			go p.onEndCallback()
 		}
 	}
-	return (*p.testbed)[p.historySize + p.index], nil
+	return p.testbed[p.historySize + p.index], nil
 }
 
 func (p *ExchangeProviderFake) MarketSummary(market string) (MarketSummary, error) {
-
 	// CandleStick{rBittrex.High, rBittrex.Open, rBittrex.Close, rBittrex.Low, rBittrex.Volume, rBittrex.BaseVolume, t}
 	candle, _ := p.LastCandleStick(market, "")
 	return MarketSummary{market, candle.High, candle.Low, candle.Close, candle.Close*0.999, candle.Close*1.001, candle.Volume, candle.BaseVolume}, nil
@@ -131,7 +130,7 @@ func (p *ExchangeProviderFake) OnEnd(cb func()) {
 	p.onEndCallback = cb
 }
 
-func NewExchangeProviderFake(testbed *[]CandleStick, config map[string]string, balances map[string]float64) *ExchangeProviderFake {
+func NewExchangeProviderFake(testbed []CandleStick, config map[string]string, balances map[string]float64) ExchangeProviderFake {
 	windowSize, _ := strconv.Atoi(config["window_size"]) // TODO remove concurrent access
 	historySize := windowSize
 	if HISTORY_SIZE < windowSize {
@@ -141,5 +140,16 @@ func NewExchangeProviderFake(testbed *[]CandleStick, config map[string]string, b
 	if _, ok := config["history_size"]; ok {
 		historySize, _ = strconv.Atoi(config["history_size"])
 	}
-	return &ExchangeProviderFake{testbed, config, (*testbed)[0:historySize], 0, balances, nil, nil, historySize}
+	exchangeConfig := utils.CopyMapString(config)
+	exchangeBalances := utils.CopyMapFloat(balances)
+	tb := CopyCandles(testbed)
+	return ExchangeProviderFake{tb, exchangeConfig, tb[0:historySize], 0, exchangeBalances, nil, nil, historySize}
+}
+
+func CopyCandles(candles []CandleStick) []CandleStick {
+	targetSlice := make([]CandleStick, 0, len(candles))
+    for _, value := range candles {
+        targetSlice = append(targetSlice, value)
+    }
+    return targetSlice
 }
