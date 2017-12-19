@@ -29,9 +29,12 @@ You are welcomed to fork or/and contribute.
 
 - Running server locally 
     - `cd server`
-    - ``BITTREX_PUBLIC_KEY=<pbk> BITTREX_PRIVATE_KEY=<pvk> go run `ls *.go | grep -v _test.go` ``
+    - ``BITTREX_PUBLIC_KEY=pbk BITTREX_PRIVATE_KEY=pvk go run `ls *.go | grep -v _test.go` -kafka-consumer-group group.internal -kafka-host 192.168.10.100:9092 -kafka-zookeeper-host 192.168.10.100:2181``
 - Running frontend 
     - `npm run dev`
+- Running Kafka
+    - 
+
 
 ## Testing API
 

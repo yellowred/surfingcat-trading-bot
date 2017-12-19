@@ -32,7 +32,7 @@ type TradingBot struct {
 	Uuid string
 	c chan message.ServerMessage
 	tradingConfig map[string]string
-	strategy func(string, *[]exchange.CandleStick, MarketAction, map[string]string) MarketAction
+	strategy func(string, *[]exchange.CandleStick, MarketAction, map[string]string, func (data []string)) MarketAction
 	exchangeProvider exchange.ExchangeProvider
 	candles []exchange.CandleStick
 	lastAction MarketAction
@@ -41,6 +41,7 @@ type TradingBot struct {
 func (p *TradingBot) Start() {
 	
 	fmt.Println("Trading started at", time.Now().String()," UUID:", p.Uuid)
+	utils.Logger.BotLogger(p.Uuid, []string{"start", time.Now().String()})
 
 	// pre-shot
 	p.marketAction()
@@ -72,6 +73,7 @@ L:
 			case msg := <- p.c:
 				if msg.Uuid == p.Uuid {
 					if msg.Action == message.ServerMessageActionStop {
+						utils.Logger.BotLogger(p.Uuid, []string{"stop", time.Now().String()})
 						ticker.Stop()
 						break L
 					}
@@ -80,12 +82,16 @@ L:
 	}
 }
 
+
 func (p *TradingBot) marketAction() {
-	marketAction := p.strategy(p.market, &p.candles, p.lastAction, p.tradingConfig)
+	marketAction := p.strategy(p.market, &p.candles, p.lastAction, p.tradingConfig, func (data []string) {
+		utils.Logger.BotLogger(p.Uuid, append([]string{"strategy","dip"}, data...))
+	})
 	if marketAction.Action != MarketActionIdle {
 		p.performMarketAction(marketAction)
 	}
 }
+
 
 func (p *TradingBot) performMarketAction(action MarketAction) {
 	marketSummary, _ := p.exchangeProvider.MarketSummary(p.market)
@@ -99,8 +105,11 @@ func (p *TradingBot) performMarketAction(action MarketAction) {
 			rate := marketSummary.Ask
 			uuid, _ := p.exchangeProvider.Buy(p.market, amount/rate, rate)
 			p.lastAction = action
+			
+			utils.Logger.BotLogger(p.Uuid, []string{"market_buy", p.market, utils.Flo2str(amount/rate), utils.Flo2str(rate)})
 			fmt.Println("Order submitted:", p.lastAction, uuid, p.market, amount, rate)
 		} else {
+			utils.Logger.BotLogger(p.Uuid, []string{"market_nef", p.market, utils.Flo2str(amount/marketSummary.Ask), utils.Flo2str(marketSummary.Ask)})
 			fmt.Println("Not enough funds")
 		}
 		
@@ -110,11 +119,15 @@ func (p *TradingBot) performMarketAction(action MarketAction) {
 			rate := marketSummary.Bid
 			uuid, _ := p.exchangeProvider.Sell(p.market, amount, rate)
 			p.lastAction = action
+
+			utils.Logger.BotLogger(p.Uuid, []string{"market_sell", p.market, utils.Flo2str(amount), utils.Flo2str(rate)})
 			fmt.Println("Order submitted: SELL", uuid, p.market, amount, rate)
 		} else {
+			utils.Logger.BotLogger(p.Uuid, []string{"market_nef", p.market, utils.Flo2str(amount), utils.Flo2str(marketSummary.Ask)})
 			fmt.Println("Not enough funds")
 		}
 	} else {
+		utils.Logger.BotLogger(p.Uuid, []string{"market_ua", strconv.Itoa(action.Action)})
 		fmt.Println("Unknown action:", action.Action)
 	}
 }
@@ -122,7 +135,8 @@ func (p *TradingBot) performMarketAction(action MarketAction) {
 
 func NewBot(market string, strategy string, config map[string]string, exchangeProvider exchange.ExchangeProvider, traderStore *message.TraderStore) TradingBot {
 
-	var strategyFunc func(string, *[]exchange.CandleStick, MarketAction, map[string]string) MarketAction
+	var strategyFunc func(string, *[]exchange.CandleStick, MarketAction, map[string]string, func (data []string)) MarketAction
+	
 	switch strategy {
 	case "wma": strategyFunc = strategyWma
 	case "dip": strategyFunc = strategyDip
@@ -143,29 +157,25 @@ func NewBot(market string, strategy string, config map[string]string, exchangePr
 }
 
 
-func strategyWma(market string, candles *[]exchange.CandleStick, lastAction MarketAction, config map[string]string) MarketAction {
+func strategyWma(market string, candles *[]exchange.CandleStick, lastAction MarketAction, config map[string]string, logDecision func (data []string)) MarketAction {
 	closes := valuesFromCandles(candles)
 	
 	wmaMax, err := strconv.Atoi(config["wma_max"])
 	handleTradingError(err)
 	wmaMin, err := strconv.Atoi(config["wma_min"])
 	handleTradingError(err)
-	minPriceSpike := utils.Str2flo(config["min_price_spike"])
-	minPriceDip := utils.Str2flo(config["min_price_dip"])
 	indicatorData1 := talib.Wma(closes, wmaMax)
 	indicatorData2 := talib.Wma(closes, wmaMin)
 
-	// if we have a position then we would like to take profits
-	if lastAction.Action == MarketActionBuy && utils.LastFloat(closes) > utils.LastFloat(indicatorData2) + minPriceSpike {
-		return MarketAction{MarketActionSell, market, utils.LastFloat(closes), time.Time((*candles)[len(*candles)-1].Timestamp)}
-	}
-
-	// if we see some dip we might buy it
-	if utils.LastFloat(closes) < utils.LastFloat(indicatorData2) - minPriceDip {
-		return MarketAction{MarketActionBuy, market, utils.LastFloat(closes), time.Time((*candles)[len(*candles)-1].Timestamp)}
-	}
+	action := MarketActionIdle
+	lastPrice := utils.LastFloat(closes)
+	indi11 := indicatorData1[len(indicatorData1)-1]
+	indi12 := indicatorData1[len(indicatorData1)-2]
+	indi21 := indicatorData2[len(indicatorData2)-1]
+	indi22 := indicatorData2[len(indicatorData2)-2]
+	var distance float64 = 0
 	
-	if ((indicatorData1[len(indicatorData1)-1] < indicatorData2[len(indicatorData1)-1]) && (indicatorData1[len(indicatorData1)-2] > indicatorData2[len(indicatorData1)-2])) ||	((indicatorData1[len(indicatorData1)-1] > indicatorData2[len(indicatorData1)-1]) && (indicatorData1[len(indicatorData1)-2] < indicatorData2[len(indicatorData1)-2])) {
+	if ((indi11 < indi21 && indi12 > indi22) ||	(indi11 > indi21 && indi12 < indi22)) {
 		// TODO volume confirmation
 		// TODO instrument price above or below wma
 		// TODO wait for a retrace
@@ -174,23 +184,36 @@ func strategyWma(market string, candles *[]exchange.CandleStick, lastAction Mark
 
 		// trend confirmation
 		indicatorData3 := talib.HtTrendline(closes)
-		if indicatorData2[len(indicatorData2)-1] - indicatorData1[len(indicatorData1)-1] > 0 { //does it cross above?
+		if indi21 - indi11 > 0 { //does it cross above?
 			if indicatorData3[len(indicatorData3)-1] > indicatorData3[len(indicatorData3)-2] {
-				return MarketAction{MarketActionBuy, market, (*candles)[len(*candles)-1].Close, time.Time((*candles)[len(*candles)-1].Timestamp)}
-			}			
+				action = MarketActionBuy
+			}
 		} else {
 			if indicatorData3[len(indicatorData3)-1] < indicatorData3[len(indicatorData3)-2] {
-				return MarketAction{MarketActionSell, market, (*candles)[len(*candles)-1].Close, time.Time((*candles)[len(*candles)-1].Timestamp)}
+				action = MarketActionSell
 			}
 		}
 	} else {
-		distance := math.Min(math.Abs(indicatorData2[len(indicatorData2)-1] - indicatorData1[len(indicatorData1)-1]), math.Abs(indicatorData2[len(indicatorData2)-2] - indicatorData1[len(indicatorData1)-2]))
+		distance = math.Min(math.Abs(indi21 - indi11), math.Abs(indi22 - indi12))
 		fmt.Println("Distance:", distance)
 	}
+
+	logDecision([]string{
+		strconv.Itoa(action),
+		strconv.Itoa(lastAction.Action),
+		utils.Flo2str(lastPrice),
+		utils.Flo2str(indi11),
+		utils.Flo2str(indi12),
+		utils.Flo2str(indi21),
+		utils.Flo2str(indi22),
+		utils.Flo2str(distance),
+		time.Now().String()	})
+
 	return MarketAction{MarketActionIdle, market, utils.LastFloat(closes), time.Time((*candles)[len(*candles)-1].Timestamp)}
 }
 
-func strategyDip(market string, candles *[]exchange.CandleStick, lastAction MarketAction, config map[string]string) MarketAction {
+
+func strategyDip(market string, candles *[]exchange.CandleStick, lastAction MarketAction, config map[string]string, logDecision func([]string)) MarketAction {
 	wmaMin, err := strconv.Atoi(config["wma_min"])
 	handleTradingError(err)
 	minPriceSpike := utils.Str2flo(config["min_price_spike"])
@@ -200,20 +223,32 @@ func strategyDip(market string, candles *[]exchange.CandleStick, lastAction Mark
 	// indicatorData1 := talib.Wma(closes, config["wma_max"])
 	indicatorData2 := talib.Wma(closes, wmaMin)
 
+	action := MarketActionIdle
+	lastPrice := utils.LastFloat(closes)
+	lastIndicator := utils.LastFloat(indicatorData2)
+
 	// fmt.Println(config["wma_max"], config["wma_min"], "Strategy: DIP", lastAction, utils.LastFloat(closes), utils.LastFloat(indicatorData2) + utils.LastFloat(indicatorData2)*minPriceSpike, minPriceDip, minPriceSpike)
 	// if we have a position then we would like to take profits
-	if (lastAction.Action == MarketActionBuy) && utils.LastFloat(closes) > utils.LastFloat(indicatorData2) + utils.LastFloat(indicatorData2)*minPriceSpike {
-		return MarketAction{MarketActionSell, market, utils.LastFloat(closes), time.Time((*candles)[len(*candles)-1].Timestamp)}
-	}
-
+	if (lastAction.Action == MarketActionBuy) && lastPrice > lastIndicator + lastIndicator * minPriceSpike {
+		action = MarketActionSell
+	} else 
 	// if we see some dip we might buy it
-	if (lastAction.Action == MarketActionSell || lastAction.Action == MarketActionIdle) && utils.LastFloat(closes) < utils.LastFloat(indicatorData2) - utils.LastFloat(indicatorData2)*minPriceDip {
-		return MarketAction{MarketActionBuy, market, utils.LastFloat(closes), time.Time((*candles)[len(*candles)-1].Timestamp)}
+	if (lastAction.Action == MarketActionSell || lastAction.Action == MarketActionIdle) && lastPrice < lastIndicator - lastIndicator * minPriceDip {
+		action = MarketActionBuy
 	}
 
+	logDecision([]string{
+		strconv.Itoa(action),
+		strconv.Itoa(lastAction.Action),
+		utils.Flo2str(lastPrice),
+		utils.Flo2str(lastIndicator),
+		utils.Flo2str(minPriceSpike),
+		utils.Flo2str(minPriceDip),
+		time.Now().String()	})
 	// fmt.Println("No trading action", utils.LastFloat(closes), utils.LastFloat(indicatorData2), candles)
-	return MarketAction{MarketActionIdle, market, utils.LastFloat(closes), time.Time((*candles)[len(*candles)-1].Timestamp)}
+	return MarketAction{action, market, utils.LastFloat(closes), time.Time((*candles)[len(*candles)-1].Timestamp)}
 }
+
 
 func amountToOrder(limit float64, ticker string, client exchange.ExchangeProvider) float64 {
 	amountToOrder := limit

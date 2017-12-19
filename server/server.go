@@ -1,15 +1,27 @@
 package main
 
 import (
-	"fmt"
+	"log"
+	// "fmt"
 	"net/http"
 	"github.com/urfave/negroni"
 	"github.com/rs/cors"
-	configManager "github.com/yellowred/surfingcat-trading-bot/server/config"
+	// configManager "github.com/yellowred/surfingcat-trading-bot/server/config"
 	"github.com/yellowred/surfingcat-trading-bot/server/message"
+	// "github.com/yellowred/surfingcat-trading-bot/server/utils"
+	"flag"
+	"github.com/gorilla/websocket"
 )
 
+
 var traderStore *message.TraderStore
+
+var (
+	apiPort      = flag.String("api-port", "3026", "The API port (i.e. 3026)")
+	wssPort  	 = flag.String("wss-port", "3028", "The WebSocket port (i.e. 3028)")
+	upgrader 	 = websocket.Upgrader{}
+	upgraderMt 	 = websocket.TextMessage
+)
 
 func main() {
 	startServer()
@@ -18,6 +30,19 @@ func main() {
 
 func startServer() {
 
+	flag.Parse()
+	log.SetFlags(0)
+
+	// start WSS
+	wss := http.NewServeMux()
+	wss.HandleFunc("/message/", handleWsMessage)
+	go func() {
+		n := negroni.Classic() // Includes some default middlewares
+		n.UseHandler(wss)
+        log.Println("Starting to listen on " + *wssPort)
+        http.ListenAndServe(":" + *wssPort, n)
+	}()
+	
 	mux := http.NewServeMux()
 	traderStore = message.NewTraderStore()
 
@@ -32,6 +57,8 @@ func startServer() {
 	mux.HandleFunc("/strategy/supertest", handleStrategySuperTest)
 	mux.HandleFunc("/chart/testbed", handleTestbedChart)
 	mux.HandleFunc("/indicator/testbed", handleTestbedIndicatorChart)
+
+	mux.HandleFunc("/message/", handleMessage)
 	
 	c := cors.New(cors.Options{
 		AllowedOrigins: []string{"*"},
@@ -40,9 +67,6 @@ func startServer() {
 	n.Use(c)
 	n.UseHandler(mux)
 
-
-
-
-	fmt.Printf("Starting to listen on %s...\n", configManager.ApiPort())
-	http.ListenAndServe(":" + configManager.ApiPort(), n)
+	log.Println("Starting to listen on " + *apiPort)
+	log.Fatal(http.ListenAndServe(":" + *apiPort, n))
 }

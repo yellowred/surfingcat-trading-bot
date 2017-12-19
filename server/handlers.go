@@ -15,6 +15,7 @@ import (
 	"github.com/yellowred/surfingcat-trading-bot/server/utils"
 	"sort"
 	"io/ioutil"
+	"log"
 )
 
 type PlotPoint struct {
@@ -207,7 +208,6 @@ func handleStrategyTest(w http.ResponseWriter, r *http.Request) {
 	market := r.URL.Query().Get("market")
 	strategy := r.URL.Query().Get("strategy")
 	
-
 	btx := exchange.ExchangeClient(exchange.EXCHANGE_PROVIDER_BITTREX, configManager.ExchangeConfig(exchange.EXCHANGE_PROVIDER_BITTREX))
 	
 	// get data
@@ -427,15 +427,21 @@ func StrategyResult(strategy string, market string, candleSticks []exchange.Cand
 	tickers := strings.Split(market, "-")
 	client := exchange.NewExchangeProviderFake(candleSticks, conf, map[string]float64{tickers[0]: 1, tickers[1]: 0})
 
+
 	bot := trading.NewBot(market, strategy, conf, &client, traderStore)
 	uuid := bot.Uuid
 	client.OnEnd(func(){
 		traderStore.Del(uuid)
 	})
+	
+	utils.Logger.PlatformLogger([]string{"start_bot", uuid, conf["wma_max"], conf["wma_min"]})
+
 	fmt.Println("****************************\nSTART BOT", bot.Uuid, conf["wma_max"], conf["wma_min"], "****************************")
 	bot.Start()
+	
 	bln,_ := client.Balances()
 	jsonResponse, _ := json.Marshal(client.Actions)
+	utils.Logger.PlatformLogger([]string{"finish_bot", uuid, conf["wma_max"], conf["wma_min"], bln[0].Currency, utils.Flo2str(bln[0].Available), bln[1].Currency, utils.Flo2str(bln[1].Available), utils.Flo2str(candleSticks[len(candleSticks)-1].Close)})
 	fmt.Println("****************************\nFINISH BOT", bot.Uuid, conf["wma_max"], conf["wma_min"], bln, candleSticks[len(candleSticks)-1].Close, string(jsonResponse), "****************************")
 
 	result := bln[0].Available + bln[1].Available*candleSticks[len(candleSticks)-1].Close
@@ -451,4 +457,36 @@ func StrategyResult(strategy string, market string, candleSticks []exchange.Cand
 //Strategies
 // Floor finder
 // Pump resolver
-	
+
+
+func handleMessage(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/message/platform" {
+		r := utils.ConsumeMessages()
+		jsonResponse, _ := json.Marshal(r)
+		fmt.Fprintf(w, string(jsonResponse))
+	} else {
+		http.NotFound(w, r)
+		return
+	}
+}
+
+func handleWsMessage(w http.ResponseWriter, r *http.Request) {
+	c, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Print("upgrade:", err)
+		return
+	}
+	defer c.Close()
+	messages := utils.ConsumeMessages()
+	for {
+		select {
+			case msg := <-messages:
+				jsonResponse, _ := json.Marshal(msg)
+				err = c.WriteMessage(upgraderMt, jsonResponse)
+				if err != nil {
+					log.Println("ws_write:", err)
+					break
+				}
+		}
+	}
+}

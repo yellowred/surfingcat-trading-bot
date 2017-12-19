@@ -1,10 +1,12 @@
 package utils
 
+
 import (
 	"strconv"
 	"fmt"
 	"math"
 )
+
 
 func StringInSlice(a string, list []string) bool {
     for _, b := range list {
@@ -15,14 +17,21 @@ func StringInSlice(a string, list []string) bool {
     return false
 }
 
+
 func LastFloat(arr []float64) float64 {
 	return arr[len(arr) - 1]
 }
+
 
 func Str2flo(arg string) float64 {
 	r, err := strconv.ParseFloat(arg, 64)
 	HandleError(err)
 	return r
+}
+
+
+func Flo2str(flo float64) string {
+    return strconv.FormatFloat(flo, 'f', 6, 64)
 }
 
 
