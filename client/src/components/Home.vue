@@ -30,12 +30,12 @@ export default {
     }
   },
   mounted () {
-    var self = this;
-    this.ws = new WebSocket('ws://' + window.location.host + ':3028/messages');
-    this.ws.addEventListener('message', function(e) {
-        var msg = JSON.parse(e.data);
-        console.log(e.data)
-    });
+    // var self = this;
+    this.ws = new WebSocket('ws://' + window.location.host + ':3028/messages')
+    this.ws.addEventListener('message', function (e) {
+      // var msg = JSON.parse(e.data)
+      console.log(e.data)
+    })
   },
   methods: {
     getLogs (topic) {

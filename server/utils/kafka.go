@@ -2,25 +2,24 @@ package utils
 
 import (
 	"flag"
-	"github.com/Shopify/sarama"
-	"github.com/wvanbergen/kafka/consumergroup" // consumer groups currently in a separate package
-	"github.com/wvanbergen/kazoo-go"
-    "log"
+	"log"
 	"os"
 	"os/signal"
 	"time"
+
+	"github.com/Shopify/sarama"
+	"github.com/wvanbergen/kafka/consumergroup" // consumer groups currently in a separate package
+	"github.com/wvanbergen/kazoo-go"
 	// "encoding/json"
 	"strings"
 )
 
 var Logger LoggerInterface
 
-
 type KafkaMessage struct {
 	Message string
-	Time time.Time
+	Time    time.Time
 }
-
 
 type LoggerInterface interface {
 	PlatformLogger(message []string)
@@ -32,15 +31,13 @@ type KafkaLogger struct {
 	producer sarama.AsyncProducer
 }
 
-
 var (
-	kafkaConn      = flag.String("kafka-host", "", "A comma-separated Zookeeper connection string (e.g. `zookeeper1.local:2181,zookeeper2.local:2181,zookeeper3.local:2181`)")
-	consumerGroup  = flag.String("kafka-consumer-group", "group.testing", "The name of the consumer group, used for coordination and load balancing")
-	zookeeper      = flag.String("kafka-zookeeper-host", "", "A comma-separated Zookeeper connection string (e.g. `zookeeper1.local:2181,zookeeper2.local:2181,zookeeper3.local:2181`)")
+	kafkaConn     = flag.String("kafka-host", "", "A comma-separated Zookeeper connection string (e.g. `zookeeper1.local:2181,zookeeper2.local:2181,zookeeper3.local:2181`)")
+	consumerGroup = flag.String("kafka-consumer-group", "group.testing", "The name of the consumer group, used for coordination and load balancing")
+	zookeeper     = flag.String("kafka-zookeeper-host", "", "A comma-separated Zookeeper connection string (e.g. `zookeeper1.local:2181,zookeeper2.local:2181,zookeeper3.local:2181`)")
 
 	zookeeperNodes []string
 )
-
 
 func init() {
 	sarama.Logger = log.New(os.Stdout, "[Sarama] ", log.LstdFlags)
@@ -81,40 +78,36 @@ func init() {
 		}
 	}()
 
-
 	Logger = &KafkaLogger{producer}
 }
 
-
-
 func (l *KafkaLogger) PlatformLogger(message []string) {
 	msg := &sarama.ProducerMessage{
-		Topic: "platform",
+		Topic:     "platform",
 		Timestamp: time.Now(),
-		Value: sarama.ByteEncoder(strings.Join(message, ",")),
+		Value:     sarama.ByteEncoder(strings.Join(message, ",")),
 	}
 	l.producer.Input() <- msg
 }
 
 func (l *KafkaLogger) BotLogger(botId string, message []string) {
 	msg := &sarama.ProducerMessage{
-		Topic: "bot",
-		Key: sarama.StringEncoder(botId),
+		Topic:     "bot",
+		Key:       sarama.StringEncoder(botId),
 		Timestamp: time.Now(),
-		Value: sarama.ByteEncoder(strings.Join(message, ",")),
+		Value:     sarama.ByteEncoder(strings.Join(message, ",")),
 	}
 	l.producer.Input() <- msg
 }
 
 func (l *KafkaLogger) MarketLogger(message []string) {
 	msg := &sarama.ProducerMessage{
-		Topic: "market",
+		Topic:     "market",
 		Timestamp: time.Now(),
-		Value: sarama.ByteEncoder(strings.Join(message, ",")),
+		Value:     sarama.ByteEncoder(strings.Join(message, ",")),
 	}
 	l.producer.Input() <- msg
 }
-
 
 /*
 func ConsumeMessages(topic string) (messages []sarama.ConsumerMessage) {
@@ -138,7 +131,7 @@ func ConsumeMessages(topic string) (messages []sarama.ConsumerMessage) {
 	partitionList, _ := consumer.Partitions(topic) //get all partitions
 	messagesChan := make(chan *sarama.ConsumerMessage, 256)
 	initialOffset := sarama.OffsetOldest //offset to start reading message from
-	for _, partition := range partitionList {  
+	for _, partition := range partitionList {
 		pc, _ := consumer.ConsumePartition(topic, partition, initialOffset)
 		go func(pc sarama.PartitionConsumer) {
 			for message := range pc.Messages() {
@@ -174,7 +167,7 @@ func ConsumeMessages(topic string) (messages []sarama.ConsumerMessage) {
 */
 
 // @see https://github.com/wvanbergen/kafka/blob/master/examples/consumergroup/main.go
-func ConsumeMessages() (chan sarama.ConsumerMessage) {
+func ConsumeMessages() chan sarama.ConsumerMessage {
 	config := consumergroup.NewConfig()
 	config.Offsets.Initial = sarama.OffsetOldest
 	config.Offsets.ProcessingTimeout = 10 * time.Second
@@ -195,15 +188,13 @@ func ConsumeMessages() (chan sarama.ConsumerMessage) {
 		}
 	}()
 
-
 	log.Println("Consume...")
 	messages := make(chan sarama.ConsumerMessage)
-	
+
 	go func() {
 		for message := range consumer.Messages() {
-			log.Println(message)
 			messages <- *message
-			consumer.CommitUpto(message)
+			// consumer.CommitUpto(message)
 		}
 	}()
 	return messages
