@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"bytes"
+	"encoding/gob"
 	"flag"
 	"log"
 	"os"
@@ -91,11 +93,16 @@ func (l *KafkaLogger) PlatformLogger(message []string) {
 }
 
 func (l *KafkaLogger) BotLogger(botId string, message []string) {
+
+	var res bytes.Buffer
+	enc := gob.NewEncoder(&res)
+	t := PrependStringToArray(botId, message)
+	enc.Encode(t)
 	msg := &sarama.ProducerMessage{
 		Topic:     "bot",
 		Key:       sarama.StringEncoder(botId),
 		Timestamp: time.Now(),
-		Value:     sarama.ByteEncoder(strings.Join(message, ",")),
+		Value:     sarama.ByteEncoder(res.String()),
 	}
 	l.producer.Input() <- msg
 }

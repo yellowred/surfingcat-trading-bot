@@ -470,7 +470,6 @@ func handleWsMessage(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case msg := <-messages:
-			log.Println(msg)
 			jsonResponse, _ := json.Marshal(map[string]string{
 				"topic": msg.Topic,
 				"value": string(msg.Value),
