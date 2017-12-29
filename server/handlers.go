@@ -17,6 +17,8 @@ import (
 	"github.com/yellowred/surfingcat-trading-bot/server/exchange"
 	trading "github.com/yellowred/surfingcat-trading-bot/server/trading"
 	"github.com/yellowred/surfingcat-trading-bot/server/utils"
+	mgo "gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
 )
 
 type PlotPoint struct {
@@ -171,15 +173,29 @@ func handleTraderList(w http.ResponseWriter, r *http.Request) {
 }
 */
 
-func handleTraderCheck(w http.ResponseWriter, r *http.Request) {
-	client := exchange.ExchangeClient(exchange.EXCHANGE_PROVIDER_BITTREX, configManager.ExchangeConfig(exchange.EXCHANGE_PROVIDER_BITTREX))
-	// uuid, err := client.Buy("USDT-BTC", 0.001, 6000)
-	// uuid, err := client.Sell("BTC-FCT", 1, 0.01)
-	m, err := client.MarketSummary("USDT-BTC")
+type Bot struct {
+	Uuid        string   `json:"Uuid" bson:"Uuid"`
+	Status      string   `json:"Status" bson:"Status"`
+	Started     string   `json:"Started" bson:"Started"`
+	Finished    string   `json:"Finished" bson:"Finished"`
+	Strategy    string   `json:"Strategy" bson:"Strategy"`
+	Market      string   `json:"Market" bson:"Market"`
+	Config      string   `json:"Config" bson:"Config"`
+	Performance string   `json:"Performance" bson:"Performance"`
+	Actions     []string `json:"Actions" bson:"Actions"`
+}
+
+func handleTraderStatus(w http.ResponseWriter, r *http.Request) {
+	sessionMongo, err := mgo.Dial("192.168.10.100:27017")
 	if err != nil {
-		fmt.Println("ERROR OCCURRED: ", err)
+		log.Fatalln("Mongo Error", err)
 	}
-	jsonResponse, _ := json.Marshal(m)
+	defer sessionMongo.Close()
+
+	bots := []Bot{}
+	sessionMongo.DB("sf-trading-bot").C("bot").Find(bson.M{}).All(&bots)
+
+	jsonResponse, _ := json.Marshal(bots)
 	fmt.Fprintf(w, string(jsonResponse))
 }
 
@@ -337,7 +353,7 @@ func handleStrategySuperTest(w http.ResponseWriter, r *http.Request) {
 	market = configManager.TestbedMarket(market)
 
 	config := configManager.StrategyConfig(strategy)
-	config["refresh_frequency"] = "1"
+	config["refresh_frequency"] = "10000"
 	config["executeAsync"] = "N"
 	config["limit_buy"] = "10000"
 	config["limit_sell"] = "10000"

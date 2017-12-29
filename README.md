@@ -32,8 +32,10 @@ You are welcomed to fork or/and contribute.
     - ``BITTREX_PUBLIC_KEY=pbk BITTREX_PRIVATE_KEY=pvk go run `ls *.go | grep -v _test.go` -kafka-consumer-group group.internal -kafka-host 192.168.10.100:9092 -kafka-zookeeper-host 192.168.10.100:2181``
 - Running frontend 
     - `npm run dev`
-- Running Kafka
-    - 
+- Running Deps
+    - `docker-compose up -d`
+    - wait 15 secs
+    - `docker restart state` (you will see in logs state successfuly subscibed to topics)
 
 
 ## Testing API

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -44,6 +45,8 @@ func main() {
 	flag.Parse()
 	log.SetFlags(0)
 
+	log.Println("Starting...")
+
 	config := consumergroup.NewConfig()
 	config.Offsets.Initial = sarama.OffsetOldest
 	config.Offsets.ProcessingTimeout = 10 * time.Second
@@ -75,7 +78,15 @@ func main() {
 	err = nil
 	for message := range consumer.Messages() {
 
-		if message.Topic == "bot" {
+		if message.Topic == "platform" {
+			// decode
+			data := strings.Split(string(message.Value), ",")
+			fmt.Println("FB", data)
+
+			if data[0] == "finish_bot" {
+				_, err = sessionMongo.DB("sf-trading-bot").C("bot").Upsert(bson.M{"Uuid": data[1]}, bson.M{"$set": bson.M{"Performance": strings.Join(data[4:], ",")}})
+			}
+		} else if message.Topic == "bot" {
 
 			// decode
 			dec := gob.NewDecoder(bytes.NewBuffer(message.Value))

@@ -93,7 +93,6 @@ func (l *KafkaLogger) PlatformLogger(message []string) {
 }
 
 func (l *KafkaLogger) BotLogger(botId string, message []string) {
-
 	var res bytes.Buffer
 	enc := gob.NewEncoder(&res)
 	t := PrependStringToArray(botId, message)
