@@ -433,7 +433,9 @@ func handleStrategySuperTest(w http.ResponseWriter, r *http.Request) {
 
 func StrategyResult(strategy string, market string, candleSticks []exchange.CandleStick, conf map[string]string, ch chan map[string]string) {
 	tickers := strings.Split(market, "-")
-	client := exchange.NewExchangeProviderFake(candleSticks, conf, map[string]float64{tickers[0]: 1, tickers[1]: 0})
+	startBalance := map[string]float64{tickers[0]: 0, tickers[1]: 0}
+	startBalance["BTC"] = 1
+	client := exchange.NewExchangeProviderFake(candleSticks, conf, startBalance)
 
 	bot := trading.NewBot(market, strategy, conf, &client, traderStore)
 	uuid := bot.Uuid
@@ -451,9 +453,9 @@ func StrategyResult(strategy string, market string, candleSticks []exchange.Cand
 	utils.Logger.PlatformLogger([]string{"finish_bot", uuid, conf["wma_max"], conf["wma_min"], bln[0].Currency, utils.Flo2str(bln[0].Available), bln[1].Currency, utils.Flo2str(bln[1].Available), utils.Flo2str(candleSticks[len(candleSticks)-1].Close)})
 	fmt.Println("****************************\nFINISH BOT", bot.Uuid, conf["wma_max"], conf["wma_min"], bln, candleSticks[len(candleSticks)-1].Close, string(jsonResponse), "****************************")
 
-	result := bln[0].Available + bln[1].Available*candleSticks[len(candleSticks)-1].Close
-	if bln[0].Currency == tickers[1] {
-		result = bln[1].Available + bln[0].Available*candleSticks[len(candleSticks)-1].Close
+	result := bln[0].Available/candleSticks[len(candleSticks)-1].Close + bln[1].Available
+	if bln[0].Currency == "BTC" {
+		result = bln[1].Available/candleSticks[len(candleSticks)-1].Close + bln[0].Available
 	}
 
 	conf["superTestResult"] = strconv.FormatFloat(result, 'f', -1, 64)
