@@ -11,14 +11,14 @@ import (
 	"strings"
 	"time"
 
+	jwt "github.com/dgrijalva/jwt-go"
 	talib "github.com/markcheno/go-talib"
 	"github.com/yellowred/golang-bittrex-api/bittrex"
 	configManager "github.com/yellowred/surfingcat-trading-bot/server/config"
 	"github.com/yellowred/surfingcat-trading-bot/server/exchange"
 	trading "github.com/yellowred/surfingcat-trading-bot/server/trading"
 	"github.com/yellowred/surfingcat-trading-bot/server/utils"
-	mgo "gopkg.in/mgo.v2"
-	"gopkg.in/mgo.v2/bson"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type PlotPoint struct {
@@ -173,29 +173,8 @@ func handleTraderList(w http.ResponseWriter, r *http.Request) {
 }
 */
 
-type Bot struct {
-	Uuid        string   `json:"Uuid" bson:"Uuid"`
-	Status      string   `json:"Status" bson:"Status"`
-	Started     string   `json:"Started" bson:"Started"`
-	Finished    string   `json:"Finished" bson:"Finished"`
-	Strategy    string   `json:"Strategy" bson:"Strategy"`
-	Market      string   `json:"Market" bson:"Market"`
-	Config      string   `json:"Config" bson:"Config"`
-	Performance string   `json:"Performance" bson:"Performance"`
-	Actions     []string `json:"Actions" bson:"Actions"`
-}
-
 func handleTraderStatus(w http.ResponseWriter, r *http.Request) {
-	sessionMongo, err := mgo.Dial("192.168.10.100:27017")
-	if err != nil {
-		log.Fatalln("Mongo Error", err)
-	}
-	defer sessionMongo.Close()
-
-	bots := []Bot{}
-	sessionMongo.DB("sf-trading-bot").C("bot").Find(bson.M{}).All(&bots)
-
-	jsonResponse, _ := json.Marshal(bots)
+	jsonResponse, _ := json.Marshal(utils.Bots())
 	fmt.Fprintf(w, string(jsonResponse))
 }
 
@@ -499,4 +478,87 @@ func handleWsMessage(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+}
+
+// UserSignup -
+func handleUserSignup(w http.ResponseWriter, req *http.Request) {
+	/*
+		decoder := json.NewDecoder(req.Body)
+		jsondata := UserJSON{}
+		err := decoder.Decode(&jsondata)
+
+		if err != nil || jsondata.Username == "" || jsondata.Password == "" {
+			http.Error(w, "Missing username or password", http.StatusBadRequest)
+			return
+		}
+
+		if api.users.HasUser(jsondata.Username) {
+			http.Error(w, "username already exists", http.StatusBadRequest)
+			return
+		}
+
+		user := api.users.AddUser(jsondata.Username, jsondata.Password)
+
+		jsontoken := auth.GetJSONToken(user)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(jsontoken))
+	*/
+}
+
+func handleUserLogin(w http.ResponseWriter, req *http.Request) {
+
+	decoder := json.NewDecoder(req.Body)
+	jsondata := utils.User{}
+	err := decoder.Decode(&jsondata)
+
+	log.Println(err, jsondata)
+	if err != nil || jsondata.Login == "" || jsondata.Password == "" {
+		http.Error(w, "Missing username or password", http.StatusBadRequest)
+		return
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte("matsumura2121"), bcrypt.DefaultCost)
+	if err != nil {
+		panic("Permissions: bcrypt password hashing unsuccessful")
+	}
+	log.Println(string(hash))
+
+	user := utils.FindUser(jsondata.Login)
+	if user.Login == "" {
+		http.Error(w, "login not found", http.StatusBadRequest)
+		return
+	}
+
+	if bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(jsondata.Password)) != nil {
+		http.Error(w, "bad password", http.StatusBadRequest)
+		return
+	} else {
+
+	}
+
+	jsontoken := GetJSONToken(user)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(jsontoken))
+
+}
+
+var signingKey = []byte("x-sign-key")
+
+// GetToken create a jwt token with user claims
+func GetToken(user utils.User) string {
+	token := jwt.New(jwt.SigningMethodHS256)
+	claims := token.Claims.(jwt.MapClaims)
+	claims["uuid"] = user.Uuid
+	claims["exp"] = time.Now().Add(time.Hour * 24).Unix()
+	signedToken, _ := token.SignedString(signingKey)
+	return signedToken
+}
+
+// GetJSONToken create a JSON token string
+func GetJSONToken(user utils.User) string {
+	token := GetToken(user)
+	jsontoken := "{\"id_token\": \"" + token + "\"}"
+	return jsontoken
 }

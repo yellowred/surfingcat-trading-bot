@@ -227,7 +227,7 @@ func strategyDip(market string, candles *[]exchange.CandleStick, lastAction Mark
 
 	// fmt.Println(config["wma_max"], config["wma_min"], "Strategy: DIP", lastAction, utils.LastFloat(closes), utils.LastFloat(indicatorData2) + utils.LastFloat(indicatorData2)*minPriceSpike, minPriceDip, minPriceSpike)
 	// if we have a position then we would like to take profits
-	if (lastAction.Action == MarketActionBuy) && lastPrice > lastIndicator+lastIndicator*minPriceSpike {
+	if lastPrice > lastIndicator+lastIndicator*minPriceSpike {
 		action = MarketActionSell
 	} else
 	// if we see some dip we might buy it

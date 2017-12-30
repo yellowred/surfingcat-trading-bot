@@ -1,5 +1,6 @@
 <template>
-  <div class="col-sm-4 col-sm-offset-4">
+<div class="row justify-content-center mt-4">
+  <div class="justify-content-center col-sm-4 col-sm-offset-4">
     <h2>Log In</h2>
     <div class="alert alert-danger" v-if="error">
       <p>{{ error }}</p>
@@ -9,7 +10,7 @@
         type="text"
         class="form-control"
         placeholder="Enter your username"
-        v-model="credentials.username"
+        v-model="credentials.login"
         v-on:keyup.enter="submit"
       >
     </div>
@@ -24,6 +25,7 @@
     </div>
     <button class="btn btn-primary" @click="submit">Login</button>
   </div>
+</div>
 </template>
 
 <script>
@@ -33,7 +35,7 @@ export default {
   data () {
     return {
       credentials: {
-        username: '',
+        login: '',
         password: ''
       },
       error: ''
@@ -42,7 +44,7 @@ export default {
   methods: {
     submit () {
       var credentials = {
-        username: this.credentials.username,
+        login: this.credentials.login,
         password: this.credentials.password
       }
       auth.login(this, credentials, 'secretquote')

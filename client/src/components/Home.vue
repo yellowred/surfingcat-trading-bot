@@ -56,6 +56,8 @@
 
 
 <script>
+import auth from '../auth'
+
 export default {
   data () {
     return {
@@ -64,9 +66,14 @@ export default {
   },
   mounted () {
     var self = this
-    this.$http.get('http://localhost:3026/trader/status')
+    this.$http.get('http://localhost:3026/api/trader/status', {headers: auth.getAuthHeader()})
       .then(res => {
         self.bots = res.body.filter(item => item.Config !== '')
+      }, res => {
+        if (res.status === 401) {
+          auth.logout(this)
+          self.$router.replace('/login')
+        }
       })
   },
   methods: {
