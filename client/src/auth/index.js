@@ -28,7 +28,6 @@ export default {
 
   logout (context) {
     localStorage.removeItem('id_token')
-    context.$router.replace('/home')
   },
 
   isAuthenticated () {

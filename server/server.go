@@ -45,7 +45,7 @@ func startServer() {
 
 	mw := jwtmiddleware.New(jwtmiddleware.Options{
 		ValidationKeyGetter: func(token *jwt.Token) (interface{}, error) {
-			return []byte("secret"), nil
+			return []byte("x-sign-key"), nil
 		},
 		SigningMethod: jwt.SigningMethodHS256,
 	})

@@ -518,11 +518,14 @@ func handleUserLogin(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte("matsumura2121"), bcrypt.DefaultCost)
-	if err != nil {
-		panic("Permissions: bcrypt password hashing unsuccessful")
-	}
-	log.Println(string(hash))
+	/*
+		TODO sign-up code
+		hash, err := bcrypt.GenerateFromPassword([]byte("matsumura2121"), bcrypt.DefaultCost)
+		if err != nil {
+			panic("Permissions: bcrypt password hashing unsuccessful")
+		}
+		log.Println(string(hash))
+	*/
 
 	user := utils.FindUser(jsondata.Login)
 	if user.Login == "" {

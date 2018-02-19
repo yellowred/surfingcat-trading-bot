@@ -30,13 +30,19 @@ type User struct {
 }
 
 var (
-	mongoConn    = flag.String("mongo-host", "", "A comma-separated MongoDB connection string (e.g. `192.168.10.100:27017`)")
+	mongoConn    = flag.String("mongo-host", "", "A comma-separated MongoDB connection string (e.g. `192.168.10.100:27017`).")
+	mongoDebug   = flag.String("mongo-debug", "false", "Debug mongo: true/false.")
 	sessionMongo *mgo.Session
 )
 
 func init() {
 	flag.Parse()
 	log.SetFlags(0)
+
+	if *mongoDebug == "true" {
+		mgo.SetDebug(true)
+		mgo.SetLogger(log.New(os.Stdout, "[MGO] ", log.LstdFlags))
+	}
 
 	var err error
 	sessionMongo, err = mgo.Dial(*mongoConn)
