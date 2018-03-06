@@ -1,0 +1,41 @@
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: {{ template "surfingcat-trading-bot.fullname" . }}
+  labels:
+    app: {{ template "surfingcat-trading-bot.name" . }}
+    chart: {{ template "surfingcat-trading-bot.chart" . }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ template "surfingcat-trading-bot.name" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "surfingcat-trading-bot.name" . }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: app
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: NODE_ENV
+              value: development
+            - name: MONGO_HOST
+              name: {{ .Release.Name }}-{{ .Values.mongo.host }}
+          envFrom:
+            - secretRef:
+                name: trading-spa-secrets
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
