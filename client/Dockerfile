@@ -1,26 +1,19 @@
-FROM node:9
+FROM node:carbon
 
-RUN apt-get -yqq update && \
-    apt-get -y install net-tools && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+RUN mkdir -p /usr/src/app
 
-COPY package.json /tmp/package.json
+WORKDIR /usr/src/app
+ADD . /usr/src/app
+RUN npm install
 
-RUN \
-    cd /tmp && \
-    npm install --production && \
-    npm cache verify
+ENV NODE_ENV=production
 
-RUN \
-  mkdir /app && \
-  mkdir /app/log && \
-  cp -a /tmp/node_modules/ /app
+RUN npm run build
 
-ADD ./ /app
+# Remove unused directories
+RUN rm -rf ./src
+RUN rm -rf ./build
 
-WORKDIR /app
-
+# Port to expose
 EXPOSE 8080
-
-CMD npm run start
+CMD [ "npm", "start" ]
