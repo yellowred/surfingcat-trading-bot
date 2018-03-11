@@ -1,4 +1,4 @@
-go-bittrex
+go-bittrex [![GoDoc](https://godoc.org/github.com/toorop/go-bittrex?status.svg)](https://godoc.org/github.com/toorop/go-bittrex)
 ==========
 
 go-bittrex is an implementation of the Bittrex API (public and private) in Golang.
@@ -58,7 +58,7 @@ func main() {
 	}
 
 	// Bittrex client
-	bc := bittrex.NewWithCustomHttpClient(conf.Bittrex.ApiKey, conf.Bittrex.ApiSecret, httpClient)
+	bittrex := bittrex.NewWithCustomHttpClient(API_KEY, API_SECRET, httpClient)
 
 	// Get markets
 	markets, err := bittrex.GetMarkets()

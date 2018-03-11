@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	talib "github.com/markcheno/go-talib"
 	uuidGen "github.com/satori/go.uuid"
 	"github.com/yellowred/surfingcat-trading-bot/server/exchange"
@@ -17,7 +19,7 @@ import (
 type MarketAction struct {
 	Action int
 	Market string
-	Price  float64
+	Price  decimal.Decimal
 	Time   time.Time
 }
 
@@ -102,13 +104,13 @@ func (p *TradingBot) performMarketAction(action MarketAction) {
 		amount := amountToOrder(utils.Str2flo(p.tradingConfig["limit_buy"]), tickers[0], p.exchangeProvider)
 		if amount > 0 {
 			rate := marketSummary.Ask
-			uuid, _ := p.exchangeProvider.Buy(p.market, amount/rate, rate)
+			uuid, _ := p.exchangeProvider.Buy(p.market, decimal.NewFromFloat(amount).Div(rate), rate)
 			p.lastAction = action
 
-			utils.Logger.BotLogger(p.Uuid, []string{"market_buy", p.market, utils.Flo2str(amount / rate), utils.Flo2str(rate)})
+			utils.Logger.BotLogger(p.Uuid, []string{"market_buy", p.market, decimal.NewFromFloat(amount).Div(rate).String(), rate.String()})
 			fmt.Println("Order submitted:", p.lastAction, uuid, p.market, amount, rate)
 		} else {
-			utils.Logger.BotLogger(p.Uuid, []string{"market_nef", p.market, utils.Flo2str(amount / marketSummary.Ask), utils.Flo2str(marketSummary.Ask)})
+			utils.Logger.BotLogger(p.Uuid, []string{"market_nef", p.market, decimal.NewFromFloat(amount).Div(marketSummary.Ask).String(), marketSummary.Ask.String()})
 			fmt.Println("Not enough funds")
 		}
 
@@ -116,13 +118,13 @@ func (p *TradingBot) performMarketAction(action MarketAction) {
 		amount := amountToOrder(utils.Str2flo(p.tradingConfig["limit_sell"]), tickers[1], p.exchangeProvider)
 		if amount > 0 {
 			rate := marketSummary.Bid
-			uuid, _ := p.exchangeProvider.Sell(p.market, amount, rate)
+			uuid, _ := p.exchangeProvider.Sell(p.market, decimal.NewFromFloat(amount), rate)
 			p.lastAction = action
 
-			utils.Logger.BotLogger(p.Uuid, []string{"market_sell", p.market, utils.Flo2str(amount), utils.Flo2str(rate)})
+			utils.Logger.BotLogger(p.Uuid, []string{"market_sell", p.market, utils.Flo2str(amount), rate.String()})
 			fmt.Println("Order submitted: SELL", uuid, p.market, amount, rate)
 		} else {
-			utils.Logger.BotLogger(p.Uuid, []string{"market_nef", p.market, utils.Flo2str(amount), utils.Flo2str(marketSummary.Ask)})
+			utils.Logger.BotLogger(p.Uuid, []string{"market_nef", p.market, utils.Flo2str(amount), marketSummary.Ask.String()})
 			fmt.Println("Not enough funds")
 		}
 	} else {
@@ -153,7 +155,7 @@ func NewBot(market string, strategy string, config map[string]string, exchangePr
 	uuid := uuidGen.NewV4().String()
 	ch := traderStore.Add(uuid)
 
-	return TradingBot{market, uuid, ch, testConfig, strategyFunc, exchangeProvider, candleSticks, MarketAction{MarketActionIdle, market, 0, time.Now()}}
+	return TradingBot{market, uuid, ch, testConfig, strategyFunc, exchangeProvider, candleSticks, MarketAction{MarketActionIdle, market, decimal.Zero, time.Now()}}
 }
 
 func strategyWma(market string, candles *[]exchange.CandleStick, lastAction MarketAction, config map[string]string, logDecision func(data []string)) MarketAction {
@@ -208,7 +210,7 @@ func strategyWma(market string, candles *[]exchange.CandleStick, lastAction Mark
 		utils.Flo2str(distance),
 		time.Now().String()})
 
-	return MarketAction{MarketActionIdle, market, utils.LastFloat(closes), time.Time((*candles)[len(*candles)-1].Timestamp)}
+	return MarketAction{MarketActionIdle, market, utils.LastDecimal(closes), time.Time((*candles)[len(*candles)-1].Timestamp)}
 }
 
 func strategyDip(market string, candles *[]exchange.CandleStick, lastAction MarketAction, config map[string]string, logDecision func([]string)) MarketAction {
@@ -244,21 +246,21 @@ func strategyDip(market string, candles *[]exchange.CandleStick, lastAction Mark
 		utils.Flo2str(minPriceDip),
 		time.Now().String()})
 	// fmt.Println("No trading action", utils.LastFloat(closes), utils.LastFloat(indicatorData2), candles)
-	return MarketAction{action, market, utils.LastFloat(closes), time.Time((*candles)[len(*candles)-1].Timestamp)}
+	return MarketAction{action, market, utils.LastDecimal(closes), time.Time((*candles)[len(*candles)-1].Timestamp)}
 }
 
 func amountToOrder(limit float64, ticker string, client exchange.ExchangeProvider) float64 {
 	amountToOrder := limit
 	balance, err := client.Balance(ticker)
 	handleTradingError(err)
-	if balance.Available < amountToOrder {
-		amountToOrder = balance.Available
+	if balance.Available.LessThan(decimal.NewFromFloat(amountToOrder)) {
+		amountToOrder, _ = balance.Available.Float64()
 	}
 	return amountToOrder
 }
 
-func valuesFromCandles(candleSticks *[]exchange.CandleStick) []float64 {
-	var closes []float64
+func valuesFromCandles(candleSticks *[]exchange.CandleStick) []decimal.Decimal {
+	var closes []decimal.Decimal
 	for _, candle := range *candleSticks {
 		closes = append(closes, candle.Close)
 	}

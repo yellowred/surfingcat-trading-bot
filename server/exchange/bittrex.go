@@ -1,9 +1,11 @@
 package exchange
 
 import (
+	"time"
+
+	"github.com/shopspring/decimal"
 	bittrexTicks "github.com/thebotguys/golang-bittrex-api/bittrex"
 	bittrexPrivate "github.com/toorop/go-bittrex"
-	"time"
 )
 
 type ExchangeProviderBittrex struct {
@@ -17,8 +19,8 @@ func (p ExchangeProviderBittrex) Balances() ([]Balance, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, bln := range balancesBittrex  {
-		if bln.Balance > 0 || p.config["hide_zero_balances"] != "Y" {
+	for _, bln := range balancesBittrex {
+		if bln.Balance.GreaterThan(decimal.New(0, 0)) || p.config["hide_zero_balances"] != "Y" {
 			balances = append(balances, Balance{bln.Currency, bln.Balance, bln.Available, bln.Pending, bln.CryptoAddress, bln.Requested, bln.Uuid})
 		}
 	}
@@ -33,11 +35,11 @@ func (p ExchangeProviderBittrex) Balance(ticker string) (Balance, error) {
 	return Balance{bln.Currency, bln.Balance, bln.Available, bln.Pending, bln.CryptoAddress, bln.Requested, bln.Uuid}, nil
 }
 
-func (p ExchangeProviderBittrex) Buy(market string, amount float64, rate float64) (string, error) {
+func (p ExchangeProviderBittrex) Buy(market string, amount decimal.Decimal, rate decimal.Decimal) (string, error) {
 	return p.client.BuyLimit(market, amount, rate)
 }
 
-func (p ExchangeProviderBittrex) Sell(market string, amount float64, rate float64) (string, error) {
+func (p ExchangeProviderBittrex) Sell(market string, amount decimal.Decimal, rate decimal.Decimal) (string, error) {
 	return p.client.SellLimit(market, amount, rate)
 }
 
@@ -51,7 +53,7 @@ func (p ExchangeProviderBittrex) AllCandleSticks(market string, interval string)
 	if err != nil {
 		return nil, err
 	}
-	for _, r := range rBittrex  {
+	for _, r := range rBittrex {
 		t := CandleTime{}
 		rtJson, err := r.Timestamp.MarshalJSON()
 		if err != nil {
@@ -89,7 +91,6 @@ func (p ExchangeProviderBittrex) MarketSummary(market string) (MarketSummary, er
 	}
 	return MarketSummary{r.MarketName, r.High, r.Low, r.Last, r.Bid, r.Ask, r.Volume, r.BaseVolume}, nil
 }
-
 
 func NewExchangeProviderBittrex(pbk string, pvk string, config map[string]string) ExchangeProvider {
 	c := bittrexPrivate.New(pbk, pvk)

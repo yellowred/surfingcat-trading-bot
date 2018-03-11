@@ -1,30 +1,32 @@
 package exchange
 
 import (
-	"time"
 	"fmt"
+	"time"
+
+	"github.com/shopspring/decimal"
 	configManager "github.com/yellowred/surfingcat-trading-bot/server/config"
 )
 
 type Balance struct {
-	Currency      string  `json:"Currency"`
-	Balance       float64 `json:"Balance"`
-	Available     float64 `json:"Available"`
-	Pending       float64 `json:"Pending"`
-	CryptoAddress string  `json:"CryptoAddress"`
-	Requested     bool    `json:"Requested"`
-	Uuid          string  `json:"Uuid"`
+	Currency      string          `json:"Currency"`
+	Balance       decimal.Decimal `json:"Balance"`
+	Available     decimal.Decimal `json:"Available"`
+	Pending       decimal.Decimal `json:"Pending"`
+	CryptoAddress string          `json:"CryptoAddress"`
+	Requested     bool            `json:"Requested"`
+	Uuid          string          `json:"Uuid"`
 }
 
 // CandleStick represents a single candlestick in a chart.
 type CandleStick struct {
-	High       float64    `json:"H,required"`
-	Open       float64    `json:"O,required"`
-	Close      float64    `json:"C,required"`
-	Low        float64    `json:"L,required"`
-	Volume     float64    `json:"V,required"`
-	BaseVolume float64    `json:"BV,required"`
-	Timestamp  CandleTime `json:"T,required"`
+	High       decimal.Decimal `json:"H,required"`
+	Open       decimal.Decimal `json:"O,required"`
+	Close      decimal.Decimal `json:"C,required"`
+	Low        decimal.Decimal `json:"L,required"`
+	Volume     decimal.Decimal `json:"V,required"`
+	BaseVolume decimal.Decimal `json:"BV,required"`
+	Timestamp  CandleTime      `json:"T,required"`
 }
 
 type CandleTime time.Time
@@ -45,29 +47,28 @@ func (t *CandleTime) UnmarshalJSON(b []byte) error {
 func (t *CandleTime) MarshalJSON() ([]byte, error) {
 	//do your serializing here
 	stamp := fmt.Sprintf("\"%s\"", time.Time(*t).Format("2006-01-02T15:04:05"))
-    return []byte(stamp), nil
+	return []byte(stamp), nil
 }
 
 type MarketSummary struct {
-	MarketName     string  `json:"MarketName,required"`     //The name of the market (e.g. BTC-ETH).
-	High           float64 `json:"High,required"`           // The 24h high for the market.
-	Low            float64 `json:"Low,required"`            // The 24h low for the market.
-	Last           float64 `json:"Last,required"`           // The value of the last trade for the market (in base currency).
-	Bid            float64 `json:"Bid,required"`            // The current highest bid value for the market.
-	Ask            float64 `json:"Ask,required"`            // The current lowest ask value for the market.
-	Volume         float64 `json:"Volume,required"`         // The 24h volume of the market, in market currency.
-	BaseVolume     float64 `json:"BaseVolume,required"`     // The 24h volume for the market, in base currency.
+	MarketName string          `json:"MarketName,required"` //The name of the market (e.g. BTC-ETH).
+	High       decimal.Decimal `json:"High,required"`       // The 24h high for the market.
+	Low        decimal.Decimal `json:"Low,required"`        // The 24h low for the market.
+	Last       decimal.Decimal `json:"Last,required"`       // The value of the last trade for the market (in base currency).
+	Bid        decimal.Decimal `json:"Bid,required"`        // The current highest bid value for the market.
+	Ask        decimal.Decimal `json:"Ask,required"`        // The current lowest ask value for the market.
+	Volume     decimal.Decimal `json:"Volume,required"`     // The 24h volume of the market, in market currency.
+	BaseVolume decimal.Decimal `json:"BaseVolume,required"` // The 24h volume for the market, in base currency.
 }
 
 type ExchangeProvider interface {
-	
 	Balances() ([]Balance, error)
 
 	Balance(ticker string) (Balance, error)
 
-	Buy(market string, amount float64, rate float64) (string, error)
+	Buy(market string, amount decimal.Decimal, rate decimal.Decimal) (string, error)
 
-	Sell(market string, amount float64, rate float64) (string, error)
+	Sell(market string, amount decimal.Decimal, rate decimal.Decimal) (string, error)
 
 	Name() string
 
@@ -80,7 +81,6 @@ type ExchangeProvider interface {
 
 const EXCHANGE_PROVIDER_BITTREX = "bittrex"
 const EXCHANGE_PROVIDER_FAKE = "fake"
-
 
 func ExchangeClient(name string, config map[string]string) ExchangeProvider {
 	if name == EXCHANGE_PROVIDER_BITTREX {

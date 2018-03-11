@@ -72,7 +72,7 @@ func GetServerAPIVersion() (string, error) {
 
 // GetBTCPrice returns the current BTC Price.
 func GetBTCPrice() (*BTCPrice, error) {
-	result, err := publicCall("currencies", "GetBTCPrice", nil, nil)
+	result, err := publicCall("currencies", "GetBTCPrice", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -110,20 +110,17 @@ func GetMarketSummaries() (MarketSummaries, error) {
 	GetParameters := publicParams{
 		Timestamp: &now,
 	}
-	result, err := publicCall("markets", "GetMarketSummaries", &GetParameters, nil)
+	result, err := publicCall("markets", "GetMarketSummaries", &GetParameters)
 	if err != nil {
 		return nil, err
 	}
-	var resp marketSummariesResult
+	var resp MarketSummariesResult
 	err = json.Unmarshal(*result, &resp)
 	if err != nil {
 		return nil, err
 	}
-	ret := make(MarketSummaries, len(resp))
-	for i, respItem := range resp {
-		ret[i] = respItem.Summary
-	}
-	return ret, nil
+
+	return resp.Summaries(), nil
 }
 
 // GetMarketSummary gets the summary of a single market.
@@ -134,7 +131,7 @@ func GetMarketSummary(marketName string) (*MarketSummary, error) {
 		Timestamp:  &now,
 	}
 
-	result, err := publicCall("market", "GetMarketSummary", &GetParameters, nil)
+	result, err := publicCall("market", "GetMarketSummary", &GetParameters)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +156,7 @@ func tickFunc(marketName, tickInterval, tickFeature string) (CandleSticks, error
 		TickInterval: &tickInterval,
 		Timestamp:    &now,
 	}
-	result, err := publicCall("market", tickFeature, &GetParameters, nil)
+	result, err := publicCall("market", tickFeature, &GetParameters)
 	if err != nil {
 		return nil, err
 	}
@@ -183,15 +180,19 @@ func GetMarkets() (Markets, error) {
 	GetParameters := publicParams{
 		Timestamp: &now,
 	}
-	result, err := publicCall("markets", "GetMarkets", &GetParameters, nil)
+
+	// GetMarkets uses GetMarketsSummaries now to gather its data.
+	// This is due to a 404 on GetMarkets endpoint. See Issue #28.
+	result, err := publicCall("markets", "GetMarketSummaries", &GetParameters)
 	if err != nil {
 		return nil, err
 	}
-	var resp Markets
+
+	var resp MarketSummariesResult
 	err = json.Unmarshal(*result, &resp)
 	if err != nil {
 		return nil, err
 	}
 
-	return resp, nil
+	return resp.Markets(), nil
 }

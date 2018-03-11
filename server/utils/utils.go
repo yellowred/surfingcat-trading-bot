@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+
+	"github.com/shopspring/decimal"
 )
 
 func StringInSlice(a string, list []string) bool {
@@ -17,6 +19,10 @@ func StringInSlice(a string, list []string) bool {
 }
 
 func LastFloat(arr []float64) float64 {
+	return arr[len(arr)-1]
+}
+
+func LastDecimal(arr []decimal.Decimal) decimal.Decimal {
 	return arr[len(arr)-1]
 }
 
@@ -74,6 +80,14 @@ func PrependStringToArray(prepend string, arr []string) []string {
 
 func CopyMapFloat(originalMap map[string]float64) map[string]float64 {
 	targetMap := make(map[string]float64)
+	for key, value := range originalMap {
+		targetMap[key] = value
+	}
+	return targetMap
+}
+
+func CopyMapDecimal(originalMap map[string]decimal.Decimal) map[string]decimal.Decimal {
+	targetMap := make(map[string]decimal.Decimal)
 	for key, value := range originalMap {
 		targetMap[key] = value
 	}
