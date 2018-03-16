@@ -160,16 +160,17 @@ func NewBot(market string, strategy string, config map[string]string, exchangePr
 
 func strategyWma(market string, candles *[]exchange.CandleStick, lastAction MarketAction, config map[string]string, logDecision func(data []string)) MarketAction {
 	closes := valuesFromCandles(candles)
+	closesFloat := utils.ArrayDecimalToFloat(closes)
 
 	wmaMax, err := strconv.Atoi(config["wma_max"])
 	handleTradingError(err)
 	wmaMin, err := strconv.Atoi(config["wma_min"])
 	handleTradingError(err)
-	indicatorData1 := talib.Wma(closes, wmaMax)
-	indicatorData2 := talib.Wma(closes, wmaMin)
+	indicatorData1 := talib.Wma(closesFloat, wmaMax)
+	indicatorData2 := talib.Wma(closesFloat, wmaMin)
 
 	action := MarketActionIdle
-	lastPrice := utils.LastFloat(closes)
+	lastPrice := utils.LastDecimal(closes)
 	indi11 := indicatorData1[len(indicatorData1)-1]
 	indi12 := indicatorData1[len(indicatorData1)-2]
 	indi21 := indicatorData2[len(indicatorData2)-1]
@@ -184,7 +185,7 @@ func strategyWma(market string, candles *[]exchange.CandleStick, lastAction Mark
 		// TODO sell earlier
 
 		// trend confirmation
-		indicatorData3 := talib.HtTrendline(closes)
+		indicatorData3 := talib.HtTrendline(closesFloat)
 		if indi21-indi11 > 0 { //does it cross above?
 			if indicatorData3[len(indicatorData3)-1] > indicatorData3[len(indicatorData3)-2] {
 				action = MarketActionBuy
@@ -202,7 +203,7 @@ func strategyWma(market string, candles *[]exchange.CandleStick, lastAction Mark
 	logDecision([]string{
 		strconv.Itoa(action),
 		strconv.Itoa(lastAction.Action),
-		utils.Flo2str(lastPrice),
+		lastPrice.String(),
 		utils.Flo2str(indi11),
 		utils.Flo2str(indi12),
 		utils.Flo2str(indi21),
@@ -220,28 +221,30 @@ func strategyDip(market string, candles *[]exchange.CandleStick, lastAction Mark
 	minPriceDip := utils.Str2flo(config["min_price_dip"])
 
 	closes := valuesFromCandles(candles)
+	closesFloat := utils.ArrayDecimalToFloat(closes)
+
 	// indicatorData1 := talib.Wma(closes, config["wma_max"])
-	indicatorData2 := talib.Wma(closes, wmaMin)
+	indicatorData2 := talib.Wma(closesFloat, wmaMin)
 
 	action := MarketActionIdle
-	lastPrice := utils.LastFloat(closes)
-	lastIndicator := utils.LastFloat(indicatorData2)
+	lastPrice := utils.LastDecimal(closes)
+	lastIndicator := decimal.NewFromFloat(utils.LastFloat(indicatorData2))
 
 	// fmt.Println(config["wma_max"], config["wma_min"], "Strategy: DIP", lastAction, utils.LastFloat(closes), utils.LastFloat(indicatorData2) + utils.LastFloat(indicatorData2)*minPriceSpike, minPriceDip, minPriceSpike)
 	// if we have a position then we would like to take profits
-	if lastPrice > lastIndicator+lastIndicator*minPriceSpike {
+	if lastIndicator.Add(lastIndicator.Mul(decimal.NewFromFloat(minPriceSpike))).LessThan(lastPrice) {
 		action = MarketActionSell
 	} else
 	// if we see some dip we might buy it
-	if (lastAction.Action == MarketActionSell || lastAction.Action == MarketActionIdle) && lastPrice < lastIndicator-lastIndicator*minPriceDip {
+	if (lastAction.Action == MarketActionSell || lastAction.Action == MarketActionIdle) && lastPrice.LessThan(lastIndicator.Sub(lastIndicator.Mul(decimal.NewFromFloat(minPriceDip)))) {
 		action = MarketActionBuy
 	}
 
 	logDecision([]string{
 		strconv.Itoa(action),
 		strconv.Itoa(lastAction.Action),
-		utils.Flo2str(lastPrice),
-		utils.Flo2str(lastIndicator),
+		lastPrice.String(),
+		lastIndicator.String(),
 		utils.Flo2str(minPriceSpike),
 		utils.Flo2str(minPriceDip),
 		time.Now().String()})

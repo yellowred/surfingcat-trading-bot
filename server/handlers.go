@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	jwt "github.com/dgrijalva/jwt-go"
 	talib "github.com/markcheno/go-talib"
 	"github.com/yellowred/golang-bittrex-api/bittrex"
@@ -267,7 +269,8 @@ func handleTestbedChart(w http.ResponseWriter, r *http.Request) {
 
 	var res PlotPoints
 	for _, candle := range candleSticks {
-		res = append(res, PlotPoint{time.Time(candle.Timestamp).String(), strconv.FormatFloat(candle.Close, 'f', 6, 64)})
+		c, _ := candle.Close.Float64()
+		res = append(res, PlotPoint{time.Time(candle.Timestamp).String(), strconv.FormatFloat(c, 'f', 6, 64)})
 	}
 
 	jsonResponse, _ := json.Marshal(res)
@@ -289,7 +292,8 @@ func handleTestbedIndicatorChart(w http.ResponseWriter, r *http.Request) {
 
 	var closes []float64
 	for _, candle := range candleSticks {
-		closes = append(closes, candle.Close)
+		c, _ := candle.Close.Float64()
+		closes = append(closes, c)
 	}
 
 	var indicatorData []float64
@@ -412,8 +416,8 @@ func handleStrategySuperTest(w http.ResponseWriter, r *http.Request) {
 
 func StrategyResult(strategy string, market string, candleSticks []exchange.CandleStick, conf map[string]string, ch chan map[string]string) {
 	tickers := strings.Split(market, "-")
-	startBalance := map[string]float64{tickers[0]: 0, tickers[1]: 0}
-	startBalance["BTC"] = 1
+	startBalance := map[string]decimal.Decimal{tickers[0]: decimal.Zero, tickers[1]: decimal.Zero}
+	startBalance["BTC"] = decimal.New(1, 0)
 	client := exchange.NewExchangeProviderFake(candleSticks, conf, startBalance)
 
 	bot := trading.NewBot(market, strategy, conf, &client, traderStore)
@@ -429,15 +433,15 @@ func StrategyResult(strategy string, market string, candleSticks []exchange.Cand
 
 	bln, _ := client.Balances()
 	jsonResponse, _ := json.Marshal(client.Actions)
-	utils.Logger.PlatformLogger([]string{"finish_bot", uuid, conf["wma_max"], conf["wma_min"], bln[0].Currency, utils.Flo2str(bln[0].Available), bln[1].Currency, utils.Flo2str(bln[1].Available), utils.Flo2str(candleSticks[len(candleSticks)-1].Close)})
+	utils.Logger.PlatformLogger([]string{"finish_bot", uuid, conf["wma_max"], conf["wma_min"], bln[0].Currency, bln[0].Available.String(), bln[1].Currency, bln[1].Available.String(), candleSticks[len(candleSticks)-1].Close.String()})
 	fmt.Println("****************************\nFINISH BOT", bot.Uuid, conf["wma_max"], conf["wma_min"], bln, candleSticks[len(candleSticks)-1].Close, string(jsonResponse), "****************************")
 
-	result := bln[0].Available/candleSticks[len(candleSticks)-1].Close + bln[1].Available
+	result := bln[0].Available.Div(candleSticks[len(candleSticks)-1].Close).Add(bln[1].Available)
 	if bln[0].Currency == "BTC" {
-		result = bln[1].Available/candleSticks[len(candleSticks)-1].Close + bln[0].Available
+		result = bln[1].Available.Div(candleSticks[len(candleSticks)-1].Close).Add(bln[0].Available)
 	}
 
-	conf["superTestResult"] = strconv.FormatFloat(result, 'f', -1, 64)
+	conf["superTestResult"] = result.String()
 	ch <- conf
 }
 

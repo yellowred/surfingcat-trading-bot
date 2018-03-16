@@ -98,3 +98,12 @@ func MapStringToJson(originalMap map[string]string) []byte {
 	jsonResponse, _ := json.Marshal(originalMap)
 	return jsonResponse
 }
+
+func ArrayDecimalToFloat(oldArray []decimal.Decimal) []float64 {
+	var newArray []float64
+	for _, elem := range oldArray {
+		t, _ := elem.Float64()
+		newArray = append(newArray, t)
+	}
+	return newArray
+}
