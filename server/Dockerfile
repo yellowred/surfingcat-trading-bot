@@ -40,4 +40,4 @@ RUN go build -o server .
 ENV API_PORT=3026
 EXPOSE 3026
 
-ENTRYPOINT ["./server"]
+ENTRYPOINT ./server -kafka-consumer-group group.internal -kafka-host ${KAFKA_HOST}:9092 -kafka-zookeeper-host ${ZOOKEEPER_HOST}:2181 -mongo-host=mongo:27017

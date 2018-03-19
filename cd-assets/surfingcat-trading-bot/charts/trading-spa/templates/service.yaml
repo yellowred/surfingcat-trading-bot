@@ -1,10 +1,10 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ template "surfingcat-trading-bot.fullname" . }}
+  name: {{ template "trading-spa.fullname" . }}
   labels:
-    app: {{ template "surfingcat-trading-bot.name" . }}
-    chart: {{ template "surfingcat-trading-bot.chart" . }}
+    app: {{ template "trading-spa.name" . }}
+    chart: {{ template "trading-spa.chart" . }}
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
 spec:
@@ -15,4 +15,4 @@ spec:
       nodePort: 30201
       protocol: TCP
   selector:
-    app: {{ template "surfingcat-trading-bot.name" . }}
+    app: {{ template "trading-spa.name" . }}

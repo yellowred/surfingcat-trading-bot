@@ -1,19 +1,19 @@
 apiVersion: apps/v1beta2
 kind: Deployment
 metadata:
-  name: {{ template "trading-spa.fullname" . }}
+  name: {{ template "trading-server.fullname" . }}
   labels:
-    app: {{ template "trading-spa.name" . }}
-    chart: {{ template "trading-spa.chart" . }}
+    app: {{ template "trading-server.name" . }}
+    chart: {{ template "trading-server.chart" . }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      app: {{ template "trading-spa.name" . }}
+      app: {{ template "trading-server.name" . }}
   template:
     metadata:
       labels:
-        app: {{ template "trading-spa.name" . }}
+        app: {{ template "trading-server.name" . }}
     spec:
       containers:
         - name: {{ .Chart.Name }}
@@ -21,7 +21,7 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: app
-              containerPort: 8080
+              containerPort: 3026
               protocol: TCP
           env:
             - name: NODE_ENV
@@ -30,20 +30,20 @@ spec:
               name: {{ .Release.Name }}-{{ .Values.mongo.host }}
           envFrom:
             - secretRef:
-                name: trading-spa-secrets
+                name: trading-server-secrets
           livenessProbe:
             httpGet:
               path: /
-              port: 8080
+              port: 3026
           readinessProbe:
             httpGet:
               path: /
-              port: 8080
+              port: 3026
           volumeMounts:
-              - name: vue-dev-volume
-                mountPath: /app/src
+              - name: server-dev-volume
+                mountPath: /app
       volumes:
-        - name: vue-dev-volume
+        - name: server-dev-volume
           persistentVolumeClaim:
-            claimName: vue-dev-volume-claim
+            claimName: server-dev-volume-claim
       

@@ -1,0 +1,24 @@
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: {{ template "zookeeper.fullname" . }}
+  labels:
+    app: zookeeper
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ template "zookeeper.fullname" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "zookeeper.fullname" . }}
+    spec:
+      containers:
+        - name: zookeeper
+          image: wurstmeister/zookeeper
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: app
+              containerPort: 2181
+              protocol: TCP

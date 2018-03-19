@@ -5,3 +5,9 @@ dependencies:
     tags:
       - backend
       - all
+  - name: kafka
+    repository: https://kubernetes-charts-incubator.storage.googleapis.com/
+    version: ^0.4
+    tags:
+      - backend
+      - all

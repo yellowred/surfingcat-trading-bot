@@ -5,17 +5,17 @@
 replicaCount: 1
 
 image:
-  repository: trading-spa
+  repository: trading-server
   tag: latest
   pullPolicy: Never
 
 service:
   type: NodePort
-  port: 80
+  port: 3026
 
 persistence:
   enabled: true
-  localPath: /Users/surfingcat/go_hub/src/github.com/yellowred/surfingcat-trading-bot/client
+  localPath: /Users/surfingcat/go_hub/src/github.com/yellowred/surfingcat-trading-bot/server
 
 mongo:
   host: mongo

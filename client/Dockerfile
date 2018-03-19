@@ -1,19 +1,11 @@
-FROM node:carbon
+FROM ubuntu:latest
 
-RUN mkdir -p /usr/src/app
+WORKDIR /app
+COPY . /app
 
-WORKDIR /usr/src/app
-ADD . /usr/src/app
+RUN apt-get update
+RUN apt-get install curl -y
+RUN curl -sL https://deb.nodesource.com/setup_6.x | bash - && apt-get install nodejs -y
+RUN npm install webpack -g
 RUN npm install
-
-ENV NODE_ENV=production
-
-RUN npm run build
-
-# Remove unused directories
-RUN rm -rf ./src
-RUN rm -rf ./build
-
-# Port to expose
-EXPOSE 8080
-CMD [ "npm", "start" ]
+CMD npm run dev
