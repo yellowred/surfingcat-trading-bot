@@ -29,6 +29,12 @@ type PlotPoint struct {
 }
 type PlotPoints []PlotPoint
 
+func handleServerStatus(w http.ResponseWriter, r *http.Request) {
+	res := map[string]string{"status": "OK"}
+	jsonResponse, _ := json.Marshal(res)
+	fmt.Fprintf(w, string(jsonResponse))
+}
+
 func handleChartBtcUsd(w http.ResponseWriter, r *http.Request) {
 
 	err := bittrex.IsAPIAlive()

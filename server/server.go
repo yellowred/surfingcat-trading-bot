@@ -60,6 +60,8 @@ func startServer() {
 		negroni.Wrap(http.HandlerFunc(handleTraderStatus)),
 	))
 
+	a.HandleFunc("/server/status", handleServerStatus).Methods("GET")
+
 	// r.HandleFunc("/strategy/test", handleStrategyTest).Methods("GET")
 	// r.HandleFunc("/strategy/supertest", handleStrategySuperTest).Methods("GET")
 	// r.HandleFunc("/indicator", handleIndicatorChart).Methods("GET")
