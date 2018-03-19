@@ -27,23 +27,26 @@ spec:
             - name: NODE_ENV
               value: development
             - name: MONGO_HOST
-              name: {{ .Release.Name }}-{{ .Values.mongo.host }}
+              value: {{ .Release.Name }}-{{ .Values.mongo.host }}
           envFrom:
             - secretRef:
                 name: trading-server-secrets
           livenessProbe:
             httpGet:
-              path: /
+              path: /api/server/status
               port: 3026
           readinessProbe:
             httpGet:
-              path: /
+              path: /api/server/status
               port: 3026
+          {{ if .Values.persistence.enabled }}              
           volumeMounts:
               - name: server-dev-volume
                 mountPath: /app
+          {{ end }}
+      {{ if .Values.persistence.enabled }}
       volumes:
         - name: server-dev-volume
           persistentVolumeClaim:
             claimName: server-dev-volume-claim
-      
+      {{ end }}

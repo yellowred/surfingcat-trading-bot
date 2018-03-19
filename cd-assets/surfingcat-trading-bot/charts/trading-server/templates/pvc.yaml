@@ -1,3 +1,4 @@
+{{ if .Values.persistence.enabled }}
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
@@ -10,3 +11,4 @@ spec:
       storage: 5Gi
   storageClassName: standard
   volumeName: server-dev-volume
+{{ end }}

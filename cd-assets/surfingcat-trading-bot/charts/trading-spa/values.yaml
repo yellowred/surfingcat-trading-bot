@@ -18,4 +18,4 @@ persistence:
   localPath: /Users/surfingcat/go_hub/src/github.com/yellowred/surfingcat-trading-bot/client
 
 mongo:
-  host: mongo
+  host: mongodb
