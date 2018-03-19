@@ -9,10 +9,6 @@ image:
   tag: latest
   pullPolicy: Never
 
-service:
-  type: NodePort
-  port: 80
-
 persistence:
   enabled: true
   localPath: /Users/surfingcat/go_hub/src/github.com/yellowred/surfingcat-trading-bot/client

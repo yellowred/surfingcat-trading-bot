@@ -1,0 +1,15 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: {{ template "trading-spa.fullname" . }}-lb # currently limited to 63 chars with added git hashes etc
+  labels:
+    app: {{ template "trading-spa.name" . }}
+  annotations:
+    domainName: {{ template "trading-spa.name" . }}
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 80
+      targetPort: app
+  selector:
+    app: {{ template "trading-spa.name" . }}

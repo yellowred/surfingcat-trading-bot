@@ -22,7 +22,6 @@ spec:
           ports:
             - name: app
               containerPort: 8080
-              protocol: TCP
           env:
             - name: NODE_ENV
               value: development
@@ -48,5 +47,5 @@ spec:
       volumes:
         - name: vue-dev-volume
           persistentVolumeClaim:
-            claimName: vue-dev-volume-
+            claimName: vue-dev-volume
       {{ end }}

@@ -8,11 +8,9 @@ metadata:
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
 spec:
-  type: {{ .Values.service.type }}
+  type: NodePort
   ports:
-    - port: {{ .Values.service.port }}
-      targetPort: 8080
-      nodePort: 30201
-      protocol: TCP
+    - port: 80
+      targetPort: app
   selector:
     app: {{ template "trading-spa.name" . }}
