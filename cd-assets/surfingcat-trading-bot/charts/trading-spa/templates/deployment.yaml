@@ -47,5 +47,5 @@ spec:
       volumes:
         - name: vue-dev-volume
           persistentVolumeClaim:
-            claimName: vue-dev-volume
+            claimName: vue-dev-volume-claim
       {{ end }}
