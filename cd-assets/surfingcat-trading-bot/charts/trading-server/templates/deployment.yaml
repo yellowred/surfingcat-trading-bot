@@ -20,9 +20,8 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
-            - name: app
+            - name: {{ template "trading-server.name" . }}
               containerPort: 3026
-              protocol: TCP
           env:
             - name: NODE_ENV
               value: development

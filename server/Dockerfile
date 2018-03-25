@@ -25,18 +25,19 @@ RUN curl -fsSL -o /usr/local/bin/dep https://github.com/golang/dep/releases/down
 
 RUN dep ensure -vendor-only
 
-COPY . $SRC_DIR
-
 #disable crosscompiling 
 ENV CGO_ENABLED=0
 
 #compile linux only
 ENV GOOS=linux
 
-RUN go install .
-RUN go build -o server .
-
 ENV API_PORT=3026
+
 EXPOSE 3026
 
 ENTRYPOINT ./server -kafka-consumer-group group.internal -kafka-host ${KAFKA_HOST}:9092 -kafka-zookeeper-host ${ZOOKEEPER_HOST}:2181 -mongo-host=${MONGO_HOST}:27017
+
+COPY . $SRC_DIR
+
+RUN go build -o server .
+
