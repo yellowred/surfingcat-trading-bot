@@ -11,7 +11,7 @@ image:
 
 persistence:
   enabled: true
-  localPath: /Users/surfingcat/go_hub/src/github.com/yellowred/surfingcat-trading-bot/client
+  localPath: /Users/surfingcat/go_hub/src/github.com/yellowred/surfingcat-trading-bot/client/src
 
 mongo:
   host: mongodb

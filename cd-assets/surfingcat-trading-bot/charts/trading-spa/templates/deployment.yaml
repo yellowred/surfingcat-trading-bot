@@ -20,7 +20,7 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
-            - name: app
+            - name: {{ template "trading-spa.name" . }}
               containerPort: 8080
           env:
             - name: NODE_ENV

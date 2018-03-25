@@ -10,6 +10,6 @@ spec:
   type: LoadBalancer
   ports:
     - port: 80
-      targetPort: app
+      targetPort: {{ template "trading-spa.name" . }}
   selector:
     app: {{ template "trading-spa.name" . }}
