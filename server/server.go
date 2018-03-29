@@ -10,24 +10,28 @@ import (
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/rs/cors"
 	"github.com/urfave/negroni"
+	mgo "gopkg.in/mgo.v2"
 	// configManager "github.com/yellowred/surfingcat-trading-bot/server/config"
+	"github.com/yellowred/surfingcat-trading-bot/server/kafka"
 	"github.com/yellowred/surfingcat-trading-bot/server/message"
+	"github.com/yellowred/surfingcat-trading-bot/server/mongo"
 	// "github.com/yellowred/surfingcat-trading-bot/server/utils"
 	"flag"
 
 	gmux "github.com/gorilla/mux"
+	"github.com/gorilla/websocket"
 )
 
 var traderStore *message.TraderStore
+var kafkaLogger *kafka.KafkaLogger
+var stateStorage *mongo.MongoStateStorage
 
 var (
 	apiPort = flag.String("api-port", "3026", "The API port (i.e. 3026)")
 
-	/*
-		wssPort    = flag.String("wss-port", "3028", "The WebSocket port (i.e. 3028)")
-		upgrader   = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
-		upgraderMt = websocket.TextMessage
-	*/
+	wssPort    = flag.String("wss-port", "3028", "The WebSocket port (i.e. 3028)")
+	upgrader   = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
+	upgraderMt = websocket.TextMessage
 )
 
 var (
@@ -38,43 +42,30 @@ var (
 	zookeeperNodes []string
 )
 
+var (
+	mongoConn    = flag.String("mongo-host", "", "A comma-separated MongoDB connection string (e.g. `192.168.10.100:27017`).")
+	mongoDebug   = flag.String("mongo-debug", "false", "Debug mongo: true/false.")
+	sessionMongo *mgo.Session
+)
+
 func main() {
+	flag.Parse()
+
+	traderStore = message.NewTraderStore()
+
+	kafkaLogger = kafka.NewLogger(*kafkaConn)
+
 	startServer()
 }
 
 func startServer() {
 
-	flag.Parse()
 	log.SetFlags(0)
-
-	traderStore = message.NewTraderStore()
 
 	// go StartWss()
 
 	router := gmux.NewRouter()
-
-	mw := jwtmiddleware.New(jwtmiddleware.Options{
-		ValidationKeyGetter: func(token *jwt.Token) (interface{}, error) {
-			return []byte("x-sign-key"), nil
-		},
-		SigningMethod: jwt.SigningMethodHS256,
-	})
-
-	a := router.PathPrefix("/api").Subrouter()
-	u := a.PathPrefix("/user").Subrouter()
-	u.HandleFunc("/signup", handleUserSignup).Methods("POST")
-	u.HandleFunc("/login", handleUserLogin).Methods("POST")
-
-	a.Handle("/trader/status", negroni.New(
-		negroni.HandlerFunc(mw.HandlerWithNext),
-		negroni.Wrap(http.HandlerFunc(handleTraderStatus)),
-	))
-
-	a.HandleFunc("/server/status", handleServerStatus).Methods("GET")
-
-	// r.HandleFunc("/strategy/test", handleStrategyTest).Methods("GET")
-	// r.HandleFunc("/strategy/supertest", handleStrategySuperTest).Methods("GET")
-	// r.HandleFunc("/indicator", handleIndicatorChart).Methods("GET")
+	setupRoutes(router)
 
 	n := negroni.Classic()
 	c := cors.New(cors.Options{
@@ -107,6 +98,7 @@ func startServer() {
 	*/
 }
 
+/*
 func StartWss() {
 	wss := http.NewServeMux()
 	wss.HandleFunc("/message/", handleWsMessage)
@@ -114,4 +106,30 @@ func StartWss() {
 	n.UseHandler(wss)
 	log.Println("Starting to listen on " + *wssPort)
 	http.ListenAndServe(":"+*wssPort, n)
+}
+*/
+
+func setupRoutes(r *gmux.Router) {
+	a := r.PathPrefix("/api").Subrouter()
+	u := a.PathPrefix("/user").Subrouter()
+	u.HandleFunc("/signup", handleUserSignup).Methods("POST")
+	u.HandleFunc("/login", handleUserLogin).Methods("POST")
+
+	mw := jwtmiddleware.New(jwtmiddleware.Options{
+		ValidationKeyGetter: func(token *jwt.Token) (interface{}, error) {
+			return []byte("x-sign-key"), nil
+		},
+		SigningMethod: jwt.SigningMethodHS256,
+	})
+
+	a.Handle("/trader/status", negroni.New(
+		negroni.HandlerFunc(mw.HandlerWithNext),
+		negroni.Wrap(http.HandlerFunc(handleTraderStatus)),
+	))
+
+	a.HandleFunc("/server/status", handleServerStatus).Methods("GET")
+
+	// r.HandleFunc("/strategy/test", handleStrategyTest).Methods("GET")
+	// r.HandleFunc("/strategy/supertest", handleStrategySuperTest).Methods("GET")
+	// r.HandleFunc("/indicator", handleIndicatorChart).Methods("GET")
 }

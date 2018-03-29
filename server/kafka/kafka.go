@@ -26,7 +26,7 @@ type KafkaLogger struct {
 	producer sarama.AsyncProducer
 }
 
-func NewLogger(kafkaConn string) KafkaLogger {
+func NewLogger(kafkaConn string) *KafkaLogger {
 	sarama.Logger = log.New(os.Stdout, "[Sarama] ", log.LstdFlags)
 	flag.Parse()
 
@@ -65,7 +65,7 @@ func NewLogger(kafkaConn string) KafkaLogger {
 		}
 	}()
 
-	return KafkaLogger{producer}
+	return &KafkaLogger{producer}
 }
 
 func (l *KafkaLogger) PlatformLogger(message []string) {

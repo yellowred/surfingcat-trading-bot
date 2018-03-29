@@ -1,11 +1,15 @@
-package utils
+package mongo
 
 import (
+	"encoding/json"
 	"flag"
+	"io"
 	"log"
 	"os"
 	"os/signal"
+	"time"
 
+	jwt "github.com/dgrijalva/jwt-go"
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -29,23 +33,20 @@ type User struct {
 	Password string `json:"Password" bson:"Password"`
 }
 
-var (
-	mongoConn    = flag.String("mongo-host", "", "A comma-separated MongoDB connection string (e.g. `192.168.10.100:27017`).")
-	mongoDebug   = flag.String("mongo-debug", "false", "Debug mongo: true/false.")
+type MongoStateStorage struct {
 	sessionMongo *mgo.Session
-)
+}
 
-func init() {
+func NewMongoStateStorage(mongoConn string, debug bool) *MongoStateStorage {
 	flag.Parse()
 	log.SetFlags(0)
 
-	if *mongoDebug == "true" {
+	if debug {
 		mgo.SetDebug(true)
 		mgo.SetLogger(log.New(os.Stdout, "[MGO] ", log.LstdFlags))
 	}
 
-	var err error
-	sessionMongo, err = mgo.Dial(*mongoConn)
+	sessionMongo, err := mgo.Dial(mongoConn)
 	if err != nil {
 		log.Fatalln("Mongo Error", err)
 	}
@@ -59,16 +60,44 @@ func init() {
 		log.Println("MongoDb session closed")
 		os.Exit(1)
 	}()
+
+	return &MongoStateStorage{sessionMongo}
 }
 
-func Bots() []Bot {
+func (s *MongoStateStorage) Bots() []Bot {
 	bots := []Bot{}
-	sessionMongo.DB("sf-trading-bot").C("bot").Find(bson.M{}).All(&bots)
+	s.sessionMongo.DB("sf-trading-bot").C("bot").Find(bson.M{}).All(&bots)
 	return bots
 }
 
-func FindUser(login string) User {
+func (s *MongoStateStorage) FindUser(login string) User {
 	user := User{}
-	sessionMongo.DB("sf-trading-bot").C("user").Find(bson.M{"Login": login}).One(&user)
+	s.sessionMongo.DB("sf-trading-bot").C("user").Find(bson.M{"Login": login}).One(&user)
 	return user
+}
+
+func (s *MongoStateStorage) NewUserFromJson(dataStream io.Reader) User {
+	decoder := json.NewDecoder(dataStream)
+	jsondata := User{}
+	_ = decoder.Decode(&jsondata)
+	return jsondata
+}
+
+var signingKey = []byte("x-sign-key")
+
+// GetToken create a jwt token with user claims
+func (s *MongoStateStorage) GetToken(user User) string {
+	token := jwt.New(jwt.SigningMethodHS256)
+	claims := token.Claims.(jwt.MapClaims)
+	claims["uuid"] = user.Uuid
+	claims["exp"] = time.Now().Add(time.Hour * 24).Unix()
+	signedToken, _ := token.SignedString(signingKey)
+	return signedToken
+}
+
+// GetJSONToken create a JSON token string
+func (s *MongoStateStorage) GetJSONToken(user User) string {
+	token := s.GetToken(user)
+	jsontoken := "{\"id_token\": \"" + token + "\"}"
+	return jsontoken
 }

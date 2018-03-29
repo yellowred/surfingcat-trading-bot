@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -13,7 +12,6 @@ import (
 
 	"github.com/shopspring/decimal"
 
-	jwt "github.com/dgrijalva/jwt-go"
 	talib "github.com/markcheno/go-talib"
 	"github.com/yellowred/golang-bittrex-api/bittrex"
 	configManager "github.com/yellowred/surfingcat-trading-bot/server/config"
@@ -153,7 +151,7 @@ func handleTraderStart(w http.ResponseWriter, r *http.Request) {
 		//panic(err)
 	}
 
-	bot := trading.NewBot(market, strategy, configManager.StrategyConfig(strategy), exchange.ExchangeClient(exchange.EXCHANGE_PROVIDER_BITTREX, configManager.ExchangeConfig(exchange.EXCHANGE_PROVIDER_BITTREX)), traderStore)
+	bot := trading.NewBot(market, strategy, configManager.StrategyConfig(strategy), exchange.ExchangeClient(exchange.EXCHANGE_PROVIDER_BITTREX, configManager.ExchangeConfig(exchange.EXCHANGE_PROVIDER_BITTREX)), traderStore, kafkaLogger)
 	go bot.Start()
 	jsonResponse, _ := json.Marshal(bot.Uuid)
 	fmt.Fprintf(w, string(jsonResponse))
@@ -182,7 +180,7 @@ func handleTraderList(w http.ResponseWriter, r *http.Request) {
 */
 
 func handleTraderStatus(w http.ResponseWriter, r *http.Request) {
-	jsonResponse, _ := json.Marshal(utils.Bots())
+	jsonResponse, _ := json.Marshal(stateStorage.Bots())
 	fmt.Fprintf(w, string(jsonResponse))
 }
 
@@ -426,20 +424,20 @@ func StrategyResult(strategy string, market string, candleSticks []exchange.Cand
 	startBalance["BTC"] = decimal.New(1, 0)
 	client := exchange.NewExchangeProviderFake(candleSticks, conf, startBalance)
 
-	bot := trading.NewBot(market, strategy, conf, &client, traderStore)
+	bot := trading.NewBot(market, strategy, conf, &client, traderStore, kafkaLogger)
 	uuid := bot.Uuid
 	client.OnEnd(func() {
 		traderStore.Del(uuid)
 	})
 
-	utils.Logger.PlatformLogger([]string{"start_bot", uuid, conf["wma_max"], conf["wma_min"]})
+	kafkaLogger.PlatformLogger([]string{"start_bot", uuid, conf["wma_max"], conf["wma_min"]})
 
 	fmt.Println("****************************\nSTART BOT", bot.Uuid, conf["wma_max"], conf["wma_min"], "****************************")
 	bot.Start()
 
 	bln, _ := client.Balances()
 	jsonResponse, _ := json.Marshal(client.Actions)
-	utils.Logger.PlatformLogger([]string{"finish_bot", uuid, conf["wma_max"], conf["wma_min"], bln[0].Currency, bln[0].Available.String(), bln[1].Currency, bln[1].Available.String(), candleSticks[len(candleSticks)-1].Close.String()})
+	kafkaLogger.PlatformLogger([]string{"finish_bot", uuid, conf["wma_max"], conf["wma_min"], bln[0].Currency, bln[0].Available.String(), bln[1].Currency, bln[1].Available.String(), candleSticks[len(candleSticks)-1].Close.String()})
 	fmt.Println("****************************\nFINISH BOT", bot.Uuid, conf["wma_max"], conf["wma_min"], bln, candleSticks[len(candleSticks)-1].Close, string(jsonResponse), "****************************")
 
 	result := bln[0].Available.Div(candleSticks[len(candleSticks)-1].Close).Add(bln[1].Available)
@@ -454,10 +452,10 @@ func StrategyResult(strategy string, market string, candleSticks []exchange.Cand
 //Strategies
 // Floor finder
 // Pump resolver
-
+/*
 func handleMessage(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/message/platform" {
-		r := utils.ConsumeMessages()
+		r := kafkaLogger.ConsumeMessages()
 		jsonResponse, _ := json.Marshal(r)
 		fmt.Fprintf(w, string(jsonResponse))
 	} else {
@@ -489,6 +487,7 @@ func handleWsMessage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 }
+*/
 
 // UserSignup -
 func handleUserSignup(w http.ResponseWriter, req *http.Request) {
@@ -518,12 +517,8 @@ func handleUserSignup(w http.ResponseWriter, req *http.Request) {
 
 func handleUserLogin(w http.ResponseWriter, req *http.Request) {
 
-	decoder := json.NewDecoder(req.Body)
-	jsondata := utils.User{}
-	err := decoder.Decode(&jsondata)
-
-	log.Println(err, jsondata)
-	if err != nil || jsondata.Login == "" || jsondata.Password == "" {
+	userSubmitted := stateStorage.NewUserFromJson(req.Body)
+	if userSubmitted.Login == "" || userSubmitted.Password == "" {
 		http.Error(w, "Missing username or password", http.StatusBadRequest)
 		return
 	}
@@ -537,41 +532,22 @@ func handleUserLogin(w http.ResponseWriter, req *http.Request) {
 		log.Println(string(hash))
 	*/
 
-	user := utils.FindUser(jsondata.Login)
+	user := stateStorage.FindUser(userSubmitted.Login)
 	if user.Login == "" {
 		http.Error(w, "login not found", http.StatusBadRequest)
 		return
 	}
 
-	if bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(jsondata.Password)) != nil {
+	if bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(userSubmitted.Password)) != nil {
 		http.Error(w, "bad password", http.StatusBadRequest)
 		return
 	} else {
 
 	}
 
-	jsontoken := GetJSONToken(user)
+	jsontoken := stateStorage.GetJSONToken(user)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(jsontoken))
 
-}
-
-var signingKey = []byte("x-sign-key")
-
-// GetToken create a jwt token with user claims
-func GetToken(user utils.User) string {
-	token := jwt.New(jwt.SigningMethodHS256)
-	claims := token.Claims.(jwt.MapClaims)
-	claims["uuid"] = user.Uuid
-	claims["exp"] = time.Now().Add(time.Hour * 24).Unix()
-	signedToken, _ := token.SignedString(signingKey)
-	return signedToken
-}
-
-// GetJSONToken create a JSON token string
-func GetJSONToken(user utils.User) string {
-	token := GetToken(user)
-	jsontoken := "{\"id_token\": \"" + token + "\"}"
-	return jsontoken
 }
