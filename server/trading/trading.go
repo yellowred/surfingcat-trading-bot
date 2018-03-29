@@ -38,12 +38,19 @@ type TradingBot struct {
 	exchangeProvider exchange.ExchangeProvider
 	candles          []exchange.CandleStick
 	lastAction       MarketAction
+	logger           LoggerInterface
+}
+
+type LoggerInterface interface {
+	PlatformLogger(message []string)
+	BotLogger(botId string, message []string)
+	MarketLogger(message []string)
 }
 
 func (p *TradingBot) Start() {
 
 	fmt.Println("Trading started at", time.Now().String(), " UUID:", p.Uuid)
-	utils.Logger.BotLogger(p.Uuid, []string{"start", time.Now().String(), p.market, string(utils.MapStringToJson(p.tradingConfig))})
+	p.logger.BotLogger(p.Uuid, []string{"start", time.Now().String(), p.market, string(utils.MapStringToJson(p.tradingConfig))})
 
 	// pre-shot
 	p.marketAction()
@@ -75,7 +82,7 @@ L:
 		case msg := <-p.c:
 			if msg.Uuid == p.Uuid {
 				if msg.Action == message.ServerMessageActionStop {
-					utils.Logger.BotLogger(p.Uuid, []string{"stop", time.Now().String()})
+					p.logger.BotLogger(p.Uuid, []string{"stop", time.Now().String()})
 					ticker.Stop()
 					break L
 				}
@@ -87,7 +94,7 @@ L:
 func (p *TradingBot) marketAction() {
 	marketAction := p.strategy(p.market, &p.candles, p.lastAction, p.tradingConfig, func(data []string) {
 		// TODO strategy name
-		utils.Logger.BotLogger(p.Uuid, append([]string{"strategy", "dip"}, data...))
+		p.logger.BotLogger(p.Uuid, append([]string{"strategy", "dip"}, data...))
 	})
 	if marketAction.Action != MarketActionIdle {
 		p.performMarketAction(marketAction)
@@ -107,10 +114,10 @@ func (p *TradingBot) performMarketAction(action MarketAction) {
 			uuid, _ := p.exchangeProvider.Buy(p.market, decimal.NewFromFloat(amount).Div(rate), rate)
 			p.lastAction = action
 
-			utils.Logger.BotLogger(p.Uuid, []string{"market_buy", p.market, decimal.NewFromFloat(amount).Div(rate).String(), rate.String()})
+			p.logger.BotLogger(p.Uuid, []string{"market_buy", p.market, decimal.NewFromFloat(amount).Div(rate).String(), rate.String()})
 			fmt.Println("Order submitted:", p.lastAction, uuid, p.market, amount, rate)
 		} else {
-			utils.Logger.BotLogger(p.Uuid, []string{"market_nef", p.market, decimal.NewFromFloat(amount).Div(marketSummary.Ask).String(), marketSummary.Ask.String()})
+			p.logger.BotLogger(p.Uuid, []string{"market_nef", p.market, decimal.NewFromFloat(amount).Div(marketSummary.Ask).String(), marketSummary.Ask.String()})
 			fmt.Println("Not enough funds")
 		}
 
@@ -121,19 +128,19 @@ func (p *TradingBot) performMarketAction(action MarketAction) {
 			uuid, _ := p.exchangeProvider.Sell(p.market, decimal.NewFromFloat(amount), rate)
 			p.lastAction = action
 
-			utils.Logger.BotLogger(p.Uuid, []string{"market_sell", p.market, utils.Flo2str(amount), rate.String()})
+			p.logger.BotLogger(p.Uuid, []string{"market_sell", p.market, utils.Flo2str(amount), rate.String()})
 			fmt.Println("Order submitted: SELL", uuid, p.market, amount, rate)
 		} else {
-			utils.Logger.BotLogger(p.Uuid, []string{"market_nef", p.market, utils.Flo2str(amount), marketSummary.Ask.String()})
+			p.logger.BotLogger(p.Uuid, []string{"market_nef", p.market, utils.Flo2str(amount), marketSummary.Ask.String()})
 			fmt.Println("Not enough funds")
 		}
 	} else {
-		utils.Logger.BotLogger(p.Uuid, []string{"market_ua", strconv.Itoa(action.Action)})
+		p.logger.BotLogger(p.Uuid, []string{"market_ua", strconv.Itoa(action.Action)})
 		fmt.Println("Unknown action:", action.Action)
 	}
 }
 
-func NewBot(market string, strategy string, config map[string]string, exchangeProvider exchange.ExchangeProvider, traderStore *message.TraderStore) TradingBot {
+func NewBot(market string, strategy string, config map[string]string, exchangeProvider exchange.ExchangeProvider, traderStore *message.TraderStore, logger LoggerInterface) TradingBot {
 
 	var strategyFunc func(string, *[]exchange.CandleStick, MarketAction, map[string]string, func(data []string)) MarketAction
 
@@ -155,7 +162,7 @@ func NewBot(market string, strategy string, config map[string]string, exchangePr
 	uuid := uuidGen.NewV4().String()
 	ch := traderStore.Add(uuid)
 
-	return TradingBot{market, uuid, ch, testConfig, strategyFunc, exchangeProvider, candleSticks, MarketAction{MarketActionIdle, market, decimal.Zero, time.Now()}}
+	return TradingBot{market, uuid, ch, testConfig, strategyFunc, exchangeProvider, candleSticks, MarketAction{MarketActionIdle, market, decimal.Zero, time.Now()}, logger}
 }
 
 func strategyWma(market string, candles *[]exchange.CandleStick, lastAction MarketAction, config map[string]string, logDecision func(data []string)) MarketAction {

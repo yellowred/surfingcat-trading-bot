@@ -48,6 +48,13 @@ func (p ExchangeProviderFake) MarketSummary(market string) (exchange.MarketSumma
 	return exchange.MarketSummary{market, decimal.New(10000, 0), decimal.New(6000, 0), decimal.New(6458, 0), decimal.New(6450, 0), decimal.New(6460, 0), decimal.New(1000, 0), decimal.New(1000, 0)}, nil
 }
 
+type LoggerFake struct{}
+
+func (p LoggerFake) PlatformLogger(message []string)          {}
+func (p LoggerFake) BotLogger(botId string, message []string) {}
+func (p LoggerFake) MarketLogger(message []string)            {}
+
+// implement test tables @see https://blog.alexellis.io/golang-writing-unit-tests/
 func TestTrading(t *testing.T) {
 	g := Goblin(t)
 
@@ -161,9 +168,11 @@ func TestTrading(t *testing.T) {
 					"min_price_dip":     "1",
 					"refresh_frequency": "1",
 					"window_size":       "3",
+					"limit_sell":        "1000",
 				},
 				&client,
 				traderStore,
+				LoggerFake{},
 			)
 			client.OnEnd(func() {
 				traderStore.Del(bot.Uuid)

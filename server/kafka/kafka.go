@@ -1,4 +1,4 @@
-package utils
+package kafka
 
 import (
 	"bytes"
@@ -10,42 +10,27 @@ import (
 	"time"
 
 	"github.com/Shopify/sarama"
-	"github.com/wvanbergen/kafka/consumergroup" // consumer groups currently in a separate package
-	"github.com/wvanbergen/kazoo-go"
+	// consumer groups currently in a separate package
 	// "encoding/json"
 	"strings"
-)
 
-var Logger LoggerInterface
+	"github.com/yellowred/surfingcat-trading-bot/server/utils"
+)
 
 type KafkaMessage struct {
 	Message string
 	Time    time.Time
 }
 
-type LoggerInterface interface {
-	PlatformLogger(message []string)
-	BotLogger(botId string, message []string)
-	MarketLogger(message []string)
-}
-
 type KafkaLogger struct {
 	producer sarama.AsyncProducer
 }
 
-var (
-	kafkaConn     = flag.String("kafka-host", "", "A comma-separated Zookeeper connection string (e.g. `zookeeper1.local:2181,zookeeper2.local:2181,zookeeper3.local:2181`)")
-	consumerGroup = flag.String("kafka-consumer-group", "group.testing", "The name of the consumer group, used for coordination and load balancing")
-	zookeeper     = flag.String("kafka-zookeeper-host", "", "A comma-separated Zookeeper connection string (e.g. `zookeeper1.local:2181,zookeeper2.local:2181,zookeeper3.local:2181`)")
-
-	zookeeperNodes []string
-)
-
-func init() {
+func NewLogger(kafkaConn string) KafkaLogger {
 	sarama.Logger = log.New(os.Stdout, "[Sarama] ", log.LstdFlags)
 	flag.Parse()
 
-	if *kafkaConn == "" {
+	if kafkaConn == "" {
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
@@ -54,7 +39,7 @@ func init() {
 	config.ClientID = "sf-trading-bot-server"
 	config.Producer.RequiredAcks = sarama.WaitForLocal
 	config.Producer.Compression = sarama.CompressionNone
-	producer, err := sarama.NewAsyncProducer([]string{*kafkaConn}, config)
+	producer, err := sarama.NewAsyncProducer([]string{kafkaConn}, config)
 
 	if err != nil {
 		panic(err)
@@ -80,7 +65,7 @@ func init() {
 		}
 	}()
 
-	Logger = &KafkaLogger{producer}
+	return KafkaLogger{producer}
 }
 
 func (l *KafkaLogger) PlatformLogger(message []string) {
@@ -95,7 +80,7 @@ func (l *KafkaLogger) PlatformLogger(message []string) {
 func (l *KafkaLogger) BotLogger(botId string, message []string) {
 	var res bytes.Buffer
 	enc := gob.NewEncoder(&res)
-	t := PrependStringToArray(botId, message)
+	t := utils.PrependStringToArray(botId, message)
 	enc.Encode(t)
 	msg := &sarama.ProducerMessage{
 		Topic:     "bot",
@@ -173,6 +158,7 @@ func ConsumeMessages(topic string) (messages []sarama.ConsumerMessage) {
 */
 
 // @see https://github.com/wvanbergen/kafka/blob/master/examples/consumergroup/main.go
+/*
 func ConsumeMessages() chan sarama.ConsumerMessage {
 	config := consumergroup.NewConfig()
 	config.Offsets.Initial = sarama.OffsetOldest
@@ -205,3 +191,4 @@ func ConsumeMessages() chan sarama.ConsumerMessage {
 	}()
 	return messages
 }
+*/

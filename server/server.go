@@ -16,16 +16,26 @@ import (
 	"flag"
 
 	gmux "github.com/gorilla/mux"
-	"github.com/gorilla/websocket"
 )
 
 var traderStore *message.TraderStore
 
 var (
-	apiPort    = flag.String("api-port", "3026", "The API port (i.e. 3026)")
-	wssPort    = flag.String("wss-port", "3028", "The WebSocket port (i.e. 3028)")
-	upgrader   = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
-	upgraderMt = websocket.TextMessage
+	apiPort = flag.String("api-port", "3026", "The API port (i.e. 3026)")
+
+	/*
+		wssPort    = flag.String("wss-port", "3028", "The WebSocket port (i.e. 3028)")
+		upgrader   = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
+		upgraderMt = websocket.TextMessage
+	*/
+)
+
+var (
+	kafkaConn     = flag.String("kafka-host", "", "A comma-separated Zookeeper connection string (e.g. `zookeeper1.local:2181,zookeeper2.local:2181,zookeeper3.local:2181`)")
+	consumerGroup = flag.String("kafka-consumer-group", "group.testing", "The name of the consumer group, used for coordination and load balancing")
+	zookeeper     = flag.String("kafka-zookeeper-host", "", "A comma-separated Zookeeper connection string (e.g. `zookeeper1.local:2181,zookeeper2.local:2181,zookeeper3.local:2181`)")
+
+	zookeeperNodes []string
 )
 
 func main() {
