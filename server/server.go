@@ -55,6 +55,8 @@ func main() {
 
 	kafkaLogger = kafka.NewLogger(*kafkaConn)
 
+	stateStorage = mongo.NewMongoStateStorage(*mongoConn, *mongoDebug == "true")
+
 	startServer()
 }
 

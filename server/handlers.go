@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -516,8 +517,9 @@ func handleUserSignup(w http.ResponseWriter, req *http.Request) {
 }
 
 func handleUserLogin(w http.ResponseWriter, req *http.Request) {
-
+	log.Println("Login")
 	userSubmitted := stateStorage.NewUserFromJson(req.Body)
+	log.Println("Username", userSubmitted.Login)
 	if userSubmitted.Login == "" || userSubmitted.Password == "" {
 		http.Error(w, "Missing username or password", http.StatusBadRequest)
 		return
@@ -532,12 +534,15 @@ func handleUserLogin(w http.ResponseWriter, req *http.Request) {
 		log.Println(string(hash))
 	*/
 
+	log.Println("FindUser")
 	user := stateStorage.FindUser(userSubmitted.Login)
+	log.Println("FindUserR", user.Login)
 	if user.Login == "" {
 		http.Error(w, "login not found", http.StatusBadRequest)
 		return
 	}
 
+	log.Println("CMP", user.Password, userSubmitted.Password)
 	if bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(userSubmitted.Password)) != nil {
 		http.Error(w, "bad password", http.StatusBadRequest)
 		return

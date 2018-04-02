@@ -34,10 +34,12 @@ spec:
             httpGet:
               path: /api/server/status
               port: 3026
+            periodSeconds: 60
           readinessProbe:
             httpGet:
               path: /api/server/status
               port: 3026
+            periodSeconds: 60
           {{ if .Values.persistence.enabled }}              
           volumeMounts:
               - name: server-dev-volume

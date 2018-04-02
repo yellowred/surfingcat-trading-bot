@@ -140,7 +140,7 @@ func (p *TradingBot) performMarketAction(action MarketAction) {
 	}
 }
 
-func NewBot(market string, strategy string, config map[string]string, exchangeProvider exchange.ExchangeProvider, traderStore *message.TraderStore, logger LoggerInterface) TradingBot {
+func NewBot(market, strategy string, config map[string]string, exchangeProvider exchange.ExchangeProvider, traderStore *message.TraderStore, logger LoggerInterface) TradingBot {
 
 	var strategyFunc func(string, *[]exchange.CandleStick, MarketAction, map[string]string, func(data []string)) MarketAction
 
