@@ -150,12 +150,6 @@
   version = "v1.3.0"
 
 [[projects]]
-  branch = "master"
-  name = "github.com/samuel/go-zookeeper"
-  packages = ["zk"]
-  revision = "c4fab1ac1bec58281ad0667dc3f0907a9476ac47"
-
-[[projects]]
   name = "github.com/satori/go.uuid"
   packages = ["."]
   revision = "f58768cc1a7a7e77a3bd49e98cdd21419399b6a3"
@@ -226,18 +220,6 @@
 
 [[projects]]
   branch = "master"
-  name = "github.com/wvanbergen/kafka"
-  packages = ["consumergroup"]
-  revision = "e2edea948ddfee841ea9a263b32ccca15f7d6c2f"
-
-[[projects]]
-  branch = "master"
-  name = "github.com/wvanbergen/kazoo-go"
-  packages = ["."]
-  revision = "f72d8611297a7cf105da904c04198ad701a60101"
-
-[[projects]]
-  branch = "master"
   name = "github.com/yellowred/golang-bittrex-api"
   packages = ["bittrex"]
   revision = "1ca42c647fbaf71f8c439152e4359574c7b26a92"
@@ -291,6 +273,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "4794aa235c52d40a76a40fb7447cd36df38b8ac8ab03e894332488142c50f8dc"
+  inputs-digest = "5baeea8f4083eee2e2fd7a7e8509ceb68d3530bc909ce1406536556b63a688b5"
   solver-name = "gps-cdcl"
   solver-version = 1
