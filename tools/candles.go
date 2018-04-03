@@ -17,6 +17,8 @@ var (
 
 // How to use: `echo to_be_encrypted | go run tools/passwords.go
 func main() {
+	flag.Parse()
+
 	provider := ""
 	if *candlesSource == "bittrex" {
 		provider = exchange.EXCHANGE_PROVIDER_BITTREX
