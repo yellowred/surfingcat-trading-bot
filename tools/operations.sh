@@ -38,16 +38,22 @@ trading_server_reload() {
     kubectl scale --replicas=1 deployment sftb-trading-server
 }
 
+mongo_client() {
+  kubectl exec $(kubectl get pods --selector=app=sftb-mongodb  -o=jsonpath='{$.items[0].metadata.name}') -i -t -- mongo
+}
+
 
 case $1 in
   docker) docker_install ;;
   sftb_workspace) sftb_workspace ;;
   purge) purge ;;
   trading_server_reload) trading_server_reload ;;
+  mongo_client) mongo_client ;;
   *) echo "Usage: ./operations.sh <command>
 Available commands: 
  * docker - download and install Docker for Mac,
  * purge - remove installed charts,
  * sftb_workspace - install sftb,
- * trading_server_reload - rebuild and reload trading-server";;
+ * trading_server_reload - rebuild and reload trading-server
+ * mongo_client - run a mongo client";;
 esac
