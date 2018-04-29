@@ -10,6 +10,7 @@ import (
 	"time"
 
 	jwt "github.com/dgrijalva/jwt-go"
+	"github.com/yellowred/surfingcat-trading-bot/server/utils"
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -100,4 +101,9 @@ func (s *MongoStateStorage) GetJSONToken(user User) string {
 	token := s.GetToken(user)
 	jsontoken := "{\"id_token\": \"" + token + "\"}"
 	return jsontoken
+}
+
+func (s *MongoStateStorage) SaveSupertestResult(results []map[string]string) {
+	err := s.sessionMongo.DB("sf-trading-bot").C("supertest").Insert(results)
+	utils.HandleError(err)
 }

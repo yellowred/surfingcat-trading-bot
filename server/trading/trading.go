@@ -2,6 +2,7 @@ package trading
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"strconv"
 	"strings"
@@ -48,8 +49,9 @@ type LoggerInterface interface {
 }
 
 func (p *TradingBot) Start() {
+	logger.PlatformLogger([]string{"start_bot", uuid, conf["wma_max"], conf["wma_min"]})
 
-	fmt.Println("Trading started at", time.Now().String(), " UUID:", p.Uuid)
+	log.Println("Trading started at", time.Now().String(), " UUID:", p.Uuid)
 	p.logger.BotLogger(p.Uuid, []string{"start", time.Now().String(), p.market, string(utils.MapStringToJson(p.tradingConfig))})
 
 	// pre-shot

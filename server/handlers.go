@@ -6,12 +6,8 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"sort"
 	"strconv"
-	"strings"
 	"time"
-
-	"github.com/shopspring/decimal"
 
 	talib "github.com/markcheno/go-talib"
 	"github.com/yellowred/golang-bittrex-api/bittrex"
@@ -329,125 +325,28 @@ func handleTestbedIndicatorChart(w http.ResponseWriter, r *http.Request) {
 
 func handleStrategySuperTest(w http.ResponseWriter, r *http.Request) {
 
-	strategy := r.URL.Query().Get("strategy")
+	testbed := r.URL.Query().Get("testbed")
+	settings := r.URL.Query().Get("settings")
+	variableParams := r.URL.Query().Get("variable_params")
 
-	// get data
-	var candleSticks []exchange.CandleStick
+	// get candles
+	content := utils.HttpReq(testbed)
 
-	market := r.URL.Query().Get("market")
-	dat := configManager.TestbedFile(market)
-	err := json.Unmarshal(dat, &candleSticks)
-	utils.HandleError(err)
-	market = configManager.TestbedMarket(market)
-
-	config := configManager.StrategyConfig(strategy)
-	config["refresh_frequency"] = "10000"
-	config["executeAsync"] = "N"
-	config["limit_buy"] = "10000"
-	config["limit_sell"] = "10000"
+	// configStrategy["refresh_frequency"] = "10000"
+	// configStrategy["executeAsync"] = "N"
+	// configStrategy["limit_buy"] = "10000"
+	// configStrategy["limit_sell"] = "10000"
 	// config["window_size"] = "100"
 
-	/*config["wma_max"]: 50,
-	"wma_min": 20,
-	"limit_buy": 0.1,
-	"limit_sell": 0.1,
-	"min_price_spike": 50,
-	"min_price_dip": 50*/
-	start := time.Now()
-	total := 0
-	ch := make(chan map[string]string)
-	for _, wmaMax := range append(utils.ARange(10, 20, 2), utils.ARange(20, 100, 10)...) {
-		// for _, wmaMax := range utils.ARange(80, 100, 10) {
-		for _, wmaMin := range append(utils.ARange(2, 10, 1), utils.ARange(10, 50, 5)...) {
-			// for _, wmaMin := range utils.ARange(2, 4, 2) {
-
-			testConfig := utils.CopyMapString(config)
-			testConfig["wma_max"] = strconv.FormatInt(wmaMax, 10)
-			testConfig["wma_min"] = strconv.FormatInt(wmaMin, 10)
-			if wmaMax > wmaMin {
-				fmt.Println("ITERATE", wmaMax, wmaMin, testConfig, total)
-				total = total + 1
-				go StrategyResult(strategy, market, candleSticks, testConfig, ch)
-			}
-
-		}
-	}
-
-	// 47c89d79-3c47-42f2-a781-59a836c3df0d
-
-	var results []map[string]string
-
-	for i := 1; i <= total; i++ {
-		item := <-ch
-		results = append(results, item)
-	}
-
-	sort.Sort(utils.BySuperTestResult(results))
-
-	fmt.Println("**********************************\nResults:")
-	for _, item := range results {
-		fmt.Println(item["wma_max"], item["wma_min"], item["superTestResult"])
-	}
-
-	matrix := make(map[string]map[string]string)
-	for _, item := range results {
-		// fmt.Println(item["superTestResult"], item["wma_max"], item["wma_min"])
-		if matrix[item["wma_max"]] == nil {
-			matrix[item["wma_max"]] = make(map[string]string)
-		}
-		matrix[item["wma_max"]][item["wma_min"]] = item["superTestResult"]
-	}
-
-	csv := ""
-	for _, wmaMax := range append(utils.ARange(10, 20, 2), utils.ARange(20, 100, 10)...) {
-		row := strconv.FormatInt(wmaMax, 10) + ","
-		for _, wmaMin := range append(utils.ARange(2, 10, 1), utils.ARange(10, 50, 5)...) {
-			wmaMaxS := strconv.FormatInt(wmaMax, 10)
-			wmaMinS := strconv.FormatInt(wmaMin, 10)
-			row = row + "," + matrix[wmaMaxS][wmaMinS]
-		}
-		csv = csv + row + "\n"
-	}
-
-	fmt.Println("**********************************\nCSV:")
-	fmt.Println(csv)
+	results := trading.RunSupertest([]byte(content), settings, variableParams)
 
 	elapsed := time.Since(start)
 	fmt.Printf("Strategy evaluation took %s\n", elapsed)
 
+	stateStorage.SaveSupertestResult(results)
+
 	jsonResponse, _ := json.Marshal(matrix)
 	fmt.Fprintf(w, string(jsonResponse))
-}
-
-func StrategyResult(strategy string, market string, candleSticks []exchange.CandleStick, conf map[string]string, ch chan map[string]string) {
-	tickers := strings.Split(market, "-")
-	startBalance := map[string]decimal.Decimal{tickers[0]: decimal.Zero, tickers[1]: decimal.Zero}
-	startBalance["BTC"] = decimal.New(1, 0)
-	client := exchange.NewExchangeProviderFake(candleSticks, conf, startBalance)
-
-	bot := trading.NewBot(market, strategy, conf, &client, traderStore, kafkaLogger)
-	uuid := bot.Uuid
-	client.OnEnd(func() {
-		traderStore.Del(uuid)
-	})
-
-	kafkaLogger.PlatformLogger([]string{"start_bot", uuid, conf["wma_max"], conf["wma_min"]})
-
-	fmt.Println("****************************\nSTART BOT", bot.Uuid, conf["wma_max"], conf["wma_min"], "****************************")
-	bot.Start()
-
-	bln, _ := client.Balances()
-	jsonResponse, _ := json.Marshal(client.Actions)
-	kafkaLogger.PlatformLogger([]string{"finish_bot", uuid, conf["wma_max"], conf["wma_min"], bln[0].Currency, bln[0].Available.String(), bln[1].Currency, bln[1].Available.String(), candleSticks[len(candleSticks)-1].Close.String()})
-	fmt.Println("****************************\nFINISH BOT", bot.Uuid, conf["wma_max"], conf["wma_min"], bln, candleSticks[len(candleSticks)-1].Close, string(jsonResponse), "****************************")
-
-	result := bln[0].Available.Div(candleSticks[len(candleSticks)-1].Close).Add(bln[1].Available)
-	if bln[0].Currency == "BTC" {
-		result = bln[1].Available.Div(candleSticks[len(candleSticks)-1].Close).Add(bln[0].Available)
-	}
-
-	conf["superTestResult"] = result.String()
-	ch <- conf
 }
 
 //Strategies

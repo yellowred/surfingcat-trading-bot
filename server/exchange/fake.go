@@ -3,6 +3,7 @@ package exchange
 import (
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -147,6 +148,7 @@ func NewExchangeProviderFake(testbed []CandleStick, config map[string]string, ba
 	exchangeConfig := utils.CopyMapString(config)
 	exchangeBalances := utils.CopyMapDecimal(balances)
 	tb := CopyCandles(testbed)
+	log.Println("NewExchange: client=fake, config=", exchangeConfig)
 	return ExchangeProviderFake{tb, exchangeConfig, tb[0:historySize], 0, exchangeBalances, nil, nil, historySize}
 }
 

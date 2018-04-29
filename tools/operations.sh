@@ -28,7 +28,7 @@ sftb_workspace() {
 }
 
 purge() {
-    helm delete --purge bgl
+    helm delete --purge sftb
 }
 
 trading_server_reload() {

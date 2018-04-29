@@ -32,6 +32,12 @@ func Str2flo(arg string) float64 {
 	return r
 }
 
+func Str2dec(arg string) decimal.Decimal {
+	r, err := decimal.NewFromString(arg)
+	HandleError(err)
+	return r
+}
+
 func Flo2str(flo float64) string {
 	return strconv.FormatFloat(flo, 'f', 6, 64)
 }
