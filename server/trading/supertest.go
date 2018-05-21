@@ -98,7 +98,6 @@ func StrategyResult(strategy string, market string, candleSticks []exchange.Cand
 	bot.Start()
 
 	bln, _ := client.Balances()
-	jsonResponse, _ := json.Marshal(client.Actions)
 	logger.PlatformLogger([]string{"finish_bot", uuid, testConfig["wma_max"], testConfig["wma_min"], bln[0].Currency, bln[0].Available.String(), bln[1].Currency, bln[1].Available.String(), candleSticks[len(candleSticks)-1].Close.String()})
 
 	result := bln[0].Available.Div(candleSticks[len(candleSticks)-1].Close).Add(bln[1].Available)
@@ -107,6 +106,8 @@ func StrategyResult(strategy string, market string, candleSticks []exchange.Cand
 	}
 
 	testConfig["superTestResult"] = result.String()
+	clientActionsJSON, _ := json.Marshal(client.Actions)
+	testConfig["clientActions"] = string(clientActionsJSON)
 	ch <- testConfig
 }
 
@@ -114,6 +115,7 @@ func ConfigValid(config map[string]string) bool {
 	if utils.Str2flo(config["wma_max"]) <= utils.Str2flo(config["wma_min"]) {
 		return false
 	}
+	return true
 }
 
 func LogResult(results []map[string]string) {

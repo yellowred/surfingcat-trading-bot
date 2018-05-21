@@ -17,6 +17,7 @@ func HttpReq(url string) []byte {
 	HandleError(err)
 
 	if resp.StatusCode != 200 {
+		fmt.Println(resp)
 		panic(fmt.Sprintf("Status Code: %d", resp.StatusCode))
 	}
 	defer resp.Body.Close()

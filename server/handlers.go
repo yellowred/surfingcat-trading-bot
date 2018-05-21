@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"strconv"
@@ -196,6 +195,7 @@ type TestingResult struct {
 	Balances []exchange.Balance
 }
 
+/*
 func handleStrategyTest(w http.ResponseWriter, r *http.Request) {
 	market := r.URL.Query().Get("market")
 	strategy := r.URL.Query().Get("strategy")
@@ -259,6 +259,7 @@ func handleStrategyTest(w http.ResponseWriter, r *http.Request) {
 	jsonResponse, _ := json.Marshal(results)
 	fmt.Fprintf(w, string(jsonResponse))
 }
+*/
 
 func handleTestbedChart(w http.ResponseWriter, r *http.Request) {
 	var candleSticks []exchange.CandleStick
@@ -338,15 +339,14 @@ func handleStrategySuperTest(w http.ResponseWriter, r *http.Request) {
 	// configStrategy["limit_sell"] = "10000"
 	// config["window_size"] = "100"
 
-	results := trading.RunSupertest([]byte(content), settings, variableParams)
+	start := time.Now()
+	results := trading.RunSupertest([]byte(content), []byte(settings), []byte(variableParams), traderStore, kafkaLogger)
 
 	elapsed := time.Since(start)
 	fmt.Printf("Strategy evaluation took %s\n", elapsed)
 
 	stateStorage.SaveSupertestResult(results)
-
-	jsonResponse, _ := json.Marshal(matrix)
-	fmt.Fprintf(w, string(jsonResponse))
+	fmt.Fprintf(w, "OK")
 }
 
 //Strategies

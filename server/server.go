@@ -132,6 +132,6 @@ func setupRoutes(r *gmux.Router) {
 	a.HandleFunc("/server/status", handleServerStatus).Methods("GET")
 
 	// r.HandleFunc("/strategy/test", handleStrategyTest).Methods("GET")
-	r.HandleFunc("/strategy/supertest", handleStrategySuperTest).Methods("GET")
+	a.HandleFunc("/strategy/supertest", handleStrategySuperTest).Methods("GET")
 	// r.HandleFunc("/indicator", handleIndicatorChart).Methods("GET")
 }
