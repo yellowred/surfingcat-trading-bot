@@ -1,0 +1,9 @@
+dependencies:
+- name: mongodb
+  repository: https://kubernetes-charts.storage.googleapis.com/
+  version: 0.4.27
+- name: kafka
+  repository: https://kubernetes-charts-incubator.storage.googleapis.com/
+  version: 0.4.3
+digest: sha256:30430e0fae8d71016bc354f43a746c2a6a619d503913d33838839e71b1467e9a
+generated: 2018-03-18T00:13:38.228776+08:00

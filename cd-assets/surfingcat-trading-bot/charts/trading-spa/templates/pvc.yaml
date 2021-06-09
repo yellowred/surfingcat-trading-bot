@@ -1,0 +1,14 @@
+{{ if .Values.persistence.enabled }}
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: vue-dev-volume-claim
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: standard
+  volumeName: vue-dev-volume
+{{ end }}

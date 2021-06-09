@@ -1,0 +1,15 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: {{ template "trading-server.fullname" . }}-lb
+  labels:
+    app: {{ template "trading-server.name" . }}
+  annotations:
+    domainName: {{ template "trading-server.name" . }}
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 3026
+      targetPort: {{ template "trading-server.name" . }}
+  selector:
+    app: {{ template "trading-server.name" . }}

@@ -1,0 +1,17 @@
+{{ if .Values.persistence.enabled }}
+kind: PersistentVolume
+apiVersion: v1
+metadata:
+  name: vue-dev-volume
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: standard
+  hostPath:
+    {{- with .Values.persistence }}
+    path: {{ .localPath -}}
+    {{- end }}
+{{- end }}

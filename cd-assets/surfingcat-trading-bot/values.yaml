@@ -1,0 +1,4 @@
+kafka:
+  replicas: 1
+  zookeeper:
+    servers: 1

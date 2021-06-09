@@ -1,126 +1,82 @@
 <template>
   <div class="container-fluid">
-    <div id="graph-container"></div>
-    <button class="btn btn-primary" v-on:click="getQuote()">Update</button>
-    <div id="graph-container2"></div>
-    <button class="btn btn-primary" v-on:click="getQuote2()">Update</button>
+    <div class="row mt-3 mb-3">
+      <h2>Bots</h2>
+    </div>
+
+    <div class="row">
+      <div class="card p-0 m-2"  style="width: 22rem;" v-for="item in bots">
+        <div class="card-header">
+          <h4 v-bind:class="{ 'text-muted': item.Status == 'finished', 'card-title': true }"><span class="badge badge-success" v-if="item.Status == 'started'">started</span> {{item.Market}} {{ item.Uuid }}</h4>
+        </div>
+        <div class="card-body">
+          
+          <h6 class="card-subtitle">{{item.Started}} &mdash; {{item.Finished}}</h6>
+
+          <small>
+          <table class="table table-bordered mt-2 mb-2 table-sm">
+            <tr v-for="(val, key) in JSON.parse(item.Config)">
+              <td>{{ key }}</td>
+              <td>{{ val }}</td>
+            </tr>
+          </table>
+          </small>
+
+          <button v-if="item.Actions != ''" class="btn btn-light" type="button" data-toggle="collapse" v-bind:data-target="'#ActionsList_' + item.Uuid">
+            actions list
+          </button>
+
+          <table class="collapse table table-striped mt-2 mb-2 table-sm table-responsive" v-if="item.Actions != ''" v-bind:id="'ActionsList_' + item.Uuid">
+            
+            <tr>
+              <th>Act</th>
+              <th>Market</th>
+              <th>Amount</th>
+              <th>Rate</th>
+            </tr>
+
+            <tbody>
+            <tr v-for="action in item.Actions"><td v-for="(val, key) in action.split(',')">
+
+              <span class="badge badge-success" v-if="val == 'market_buy'">buy</span>
+              <span class="badge badge-danger" v-else-if="val == 'market_sell'">sell</span>
+              <span style="font-size:0.7em" v-else-if="key == 1">{{ val }}</span>
+              <span v-else>{{ val }}</span>
+              
+              
+            </td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
+    </div>
   </div>
 </template>
 
 
 <script>
-import anychart from 'anychart'
+import auth from '../auth'
+
 export default {
   data () {
     return {
-      quote: ''
+      bots: []
     }
   },
+  mounted () {
+    var self = this
+    this.$http.get('http://localhost:3026/api/trader/status', {headers: auth.getAuthHeader()})
+      .then(res => {
+        self.bots = res.body.filter(item => item.Config !== '')
+      }, res => {
+        if (res.status === 401) {
+          auth.logout(this)
+          self.$router.replace('/login')
+        }
+      })
+  },
   methods: {
-    getQuote () {
-      let chartData = {chart: null, ema: null}
-      this.$http.get('http://localhost:3026/chart/usdbtc')
-      .then(res => {
-        chartData.chart = res.data.map(item => {
-          return [item.Date, item.Value]
-        })
-      })
-      .then(() => { return this.$http.get('http://localhost:3026/indicator?name=trima&market=USDT-BTC&interval=30') })
-      .then(res => {
-        chartData.ema50 = res.data.map(item => {
-          return [item.Date, item.Value]
-        })
-      })
-      .then(() => { return this.$http.get('http://localhost:3026/indicator?name=trima&market=USDT-BTC&interval=12') })
-      .then(res => {
-        chartData.ema20 = res.data.map(item => {
-          return [item.Date, item.Value]
-        })
-      })
-      .then(() => { return this.$http.get('http://localhost:3026/indicator?name=wma&market=USDT-BTC&interval=50') })
-      .then(res => {
-        chartData.wma50 = res.data.map(item => {
-          return [item.Date, item.Value]
-        })
-      })
-      .then(() => { return this.$http.get('http://localhost:3026/indicator?name=wma&market=USDT-BTC&interval=20') })
-      .then(res => {
-        chartData.wma20 = res.data.map(item => {
-          return [item.Date, item.Value]
-        })
-      })
-      .then(() => { return this.$http.get('http://localhost:3026/indicator?name=httrendline&market=USDT-BTC&interval=20') })
-      .then(res => {
-        chartData.trend = res.data.map(item => {
-          return [item.Date, item.Value]
-        })
-      })
-      .then(() => {
-        return anychart.onDocumentReady(() => {
-          var chart = anychart.stock(false)
-
-          chart.title('BTC Chart')
-          var plot = chart.plot()
-
-          var dataTable = anychart.data.table()
-          dataTable.addData(chartData.chart)
-          var series = plot.line(dataTable.mapAs({'value': 1}))
-          series.legendItem({text: 'USDT-BTC'})
-
-          dataTable = anychart.data.table()
-          dataTable.addData(chartData.ema50)
-          series = plot.line(dataTable.mapAs({'value': 1}))
-          series.legendItem({text: 'EMA 50'})
-
-          dataTable = anychart.data.table()
-          dataTable.addData(chartData.ema20)
-          series = plot.line(dataTable.mapAs({'value': 1}))
-          series.legendItem({text: 'EMA 20'})
-
-          dataTable = anychart.data.table()
-          dataTable.addData(chartData.wma50)
-          series = plot.line(dataTable.mapAs({'value': 1}))
-          series.legendItem({text: 'WMA 50'})
-
-          dataTable = anychart.data.table()
-          dataTable.addData(chartData.wma20)
-          series = plot.line(dataTable.mapAs({'value': 1}))
-          series.legendItem({text: 'WMA 20'})
-
-          dataTable = anychart.data.table()
-          dataTable.addData(chartData.trend)
-          series = plot.line(dataTable.mapAs({'value': 1}))
-          series.legendItem({text: 'Trend'})
-
-          chart.container('graph-container').draw()
-        })
-      })
-    },
-    getQuote2 () {
-      let chartData = {chart: null, ema: null}
-
-      this.$http.get('http://localhost:3026/strategy/test?market=USDT-BTC')
-      .then(res => {
-        chartData.testing = res.data.Balances.map(item => {
-          return [item.Date, item.Value]
-        })
-      })
-      .then((res) => {
-        return anychart.onDocumentReady(() => {
-          var chart = anychart.stock(false)
-
-          chart.title('Testing Chart')
-          var plot = chart.plot()
-
-          var dataTable = anychart.data.table()
-          dataTable.addData(chartData.testing)
-          var series = plot.line(dataTable.mapAs({'value': 1}))
-          series.legendItem({text: 'TESTING'})
-
-          chart.container('graph-container2').draw()
-        })
-      })
-    }
   }
 }
 </script>

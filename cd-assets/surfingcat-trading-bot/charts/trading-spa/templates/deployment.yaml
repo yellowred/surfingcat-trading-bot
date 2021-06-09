@@ -1,0 +1,51 @@
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: {{ template "trading-spa.fullname" . }}
+  labels:
+    app: {{ template "trading-spa.name" . }}
+    chart: {{ template "trading-spa.chart" . }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ template "trading-spa.name" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "trading-spa.name" . }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: {{ template "trading-spa.name" . }}
+              containerPort: 8080
+          env:
+            - name: NODE_ENV
+              value: development
+            - name: MONGO_HOST
+              value: {{ .Release.Name }}-{{ .Values.mongo.host }}
+          envFrom:
+            - secretRef:
+                name: trading-spa-secrets
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+          {{ if .Values.persistence.enabled }}
+          volumeMounts:
+              - name: vue-dev-volume
+                mountPath: /app/src
+          {{ end }}
+      {{ if .Values.persistence.enabled }}
+      volumes:
+        - name: vue-dev-volume
+          persistentVolumeClaim:
+            claimName: vue-dev-volume-claim
+      {{ end }}

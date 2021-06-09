@@ -1,0 +1,21 @@
+# Default values for surfingcat-trading-bot.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+
+image:
+  repository: trading-server
+  tag: latest
+  pullPolicy: Never
+
+service:
+  type: NodePort
+  port: 3026
+
+persistence:
+  enabled: true
+  localPath: /Users/surfingcat/go_hub/src/github.com/yellowred/surfingcat-trading-bot/server
+
+mongo:
+  host: mongodb

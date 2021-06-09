@@ -1,4 +1,4 @@
-const API_URL = '/api/user/'
+const API_URL = 'http://localhost:3026/api/user/'
 const LOGIN_URL = API_URL + 'login'
 const SIGNUP_URL = API_URL + 'signup'
 
@@ -28,7 +28,6 @@ export default {
 
   logout (context) {
     localStorage.removeItem('id_token')
-    context.$router.replace('/home')
   },
 
   isAuthenticated () {

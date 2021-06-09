@@ -1,0 +1,53 @@
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: {{ template "trading-server.fullname" . }}
+  labels:
+    app: {{ template "trading-server.name" . }}
+    chart: {{ template "trading-server.chart" . }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ template "trading-server.name" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "trading-server.name" . }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: {{ template "trading-server.name" . }}
+              containerPort: 3026
+          env:
+            - name: NODE_ENV
+              value: development
+            - name: MONGO_HOST
+              value: {{ .Release.Name }}-{{ .Values.mongo.host }}
+          envFrom:
+            - secretRef:
+                name: trading-server-secrets
+          livenessProbe:
+            httpGet:
+              path: /api/server/status
+              port: 3026
+            periodSeconds: 60
+          readinessProbe:
+            httpGet:
+              path: /api/server/status
+              port: 3026
+            periodSeconds: 60
+          {{ if .Values.persistence.enabled }}              
+          volumeMounts:
+              - name: server-dev-volume
+                mountPath: /app
+          {{ end }}
+      {{ if .Values.persistence.enabled }}
+      volumes:
+        - name: server-dev-volume
+          persistentVolumeClaim:
+            claimName: server-dev-volume-claim
+      {{ end }}

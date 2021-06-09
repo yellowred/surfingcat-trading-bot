@@ -1,0 +1,13 @@
+# Default values for surfingcat-trading-bot.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+
+image:
+  repository: state
+  tag: latest
+  pullPolicy: Never
+
+mongo:
+  host: mongodb

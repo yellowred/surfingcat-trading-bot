@@ -27,7 +27,12 @@ var compiler = webpack(webpackConfig)
 
 var devMiddleware = require('webpack-dev-middleware')(compiler, {
   publicPath: webpackConfig.output.publicPath,
-  quiet: true
+  quiet: true,
+  watchOptions: {
+    aggregateTimeout: 300,
+    poll: 1000,
+    "info-verbosity": "verbose"
+  }
 })
 
 var hotMiddleware = require('webpack-hot-middleware')(compiler, {
@@ -74,10 +79,6 @@ var readyPromise = new Promise(resolve => {
 console.log('> Starting dev server...')
 devMiddleware.waitUntilValid(() => {
   console.log('> Listening at ' + uri + '\n')
-  // when env is testing, don't need open it
-  if (autoOpenBrowser && process.env.NODE_ENV !== 'testing') {
-    opn(uri)
-  }
   _resolve()
 })
 

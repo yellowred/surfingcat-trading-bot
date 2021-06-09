@@ -1,0 +1,27 @@
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: {{ template "state.fullname" . }}
+  labels:
+    app: {{ template "state.name" . }}
+    chart: {{ template "state.chart" . }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ template "state.name" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "state.name" . }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: NODE_ENV
+              value: development
+          envFrom:
+            - secretRef:
+                name: state-secrets
